@@ -1,0 +1,1347 @@
+<apex:page controller="s1m_scout" 
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="true" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false" manifest="/apex/CacheManifest">
+    
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/icons.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	
+    <script>
+        $(document).on("mobileinit", function () {
+          $.mobile.hashListeningEnabled = false;
+          $.mobile.pushStateEnabled = false;
+          $.mobile.changePage.defaults.changeHash = false;
+        });
+    </script>	
+	
+	
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.mobile-1.4.0-rc.1.js')}"></script>
+	
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/Class.create.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery-encoder-0.1.0.js')}"></script>
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+	<script>
+	// **** START AJAX wrapper with Token ****
+		var s1token = window.localStorage.getItem('s1token');
+		var s1tokenexpires = window.localStorage.getItem('s1tokenexpires');
+	
+		function getNewToken(callback) {
+			$.ajax({
+				type: "GET",
+				cache: false,
+				dataType: "json",
+				url: "{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/token?sessionId={!$Api.Session_ID}&serverUrl={!$Api.Partner_Server_URL_80}",
+				success: function(s1token){
+					console.info(s1token);
+					window.localStorage.setItem('s1token', s1token.token);
+					window.localStorage.setItem('s1tokenexpires', s1token.expires);
+					callback();
+				}
+			});
+		}
+		
+		function authenticate(callback) {
+			if (s1token) {	
+				if (s1tokenexpires < Date.now()) { getNewToken(function() { callback(); }); }
+				else { callback(); }
+			}
+			else
+			{
+				getNewToken(function() { callback(); });			
+			}
+		}
+	
+		function getIgnition(requestUrl, dataBundle, requestMethod, callback) {
+		    authenticate(function() {
+			    $.ajax({
+		       		url: requestUrl,			    
+			        async: false,
+			        data : dataBundle,
+			        type: requestMethod,
+			        dataType: 'json',			        
+					headers: { 'x-access-token' : window.localStorage.getItem('s1token'), 'x-access-user' : '{!$User.UserName}'},
+			        success: function (data) {
+			            callback(data);
+			        }
+			    });
+			}); 
+		};
+	// **** END AJAX wrapper with Token ****
+	</script>	  
+
+
+  <div data-role="page" id="scoutpage">
+  
+    <div data-role="header">
+      
+        <div class="headicon-wrap">
+        	<div class="headicon-scout">
+        	</div>
+        </div>
+      
+      <h1>Scout</h1>
+            
+      <h2 class="subtext"><span id="eventcount"></span></h2>
+
+        
+
+    </div>
+
+    <div data-role="content">
+    
+              <div class="ui-grid-a optionstop">
+                  <div class="ui-block-a" style="width:85%;padding-left:14px;"><div id="filtersetting" class="wrapper">
+                  	<h2 id="viewTitle"></h2>
+                  </div></div>
+                  <div class="ui-block-b" style="width:15%;"><div style="margin: 12px 6px 0 20px;color:#333;font-size:1.4em;">
+                  	  <a href="#filter" data-transition="slidedown"><span class="icon-utility-filter filter"></span></a>
+                  </div></div>
+              </div>
+    
+    	<div class="loader" id="mainloader">
+		</div>
+    
+		<div id="events">
+		</div>
+			
+		<div id="noresults">
+			<div class="wrapper">
+  				<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow">
+  					<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+						<h2>No Results</h2>
+						<p>Based on your criteria or distance.  Try adjusting the filter or your location and try again.</p> 
+					</li>
+				</ul>			
+			</div>			
+		</div>
+		
+		
+    </div>
+
+  </div>
+
+
+  <div data-role="page" id="filter">
+  
+    <div data-role="content">  	
+  	
+  		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" style="padding:0px">
+  			<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+				<h2>Filter Scout View</h2>
+			</li>
+			<li>
+
+		      <div data-role="fieldcontain" class="selectmenu">
+		        <select name="oppdistance" id="oppdistance" data-native-menu="false" data-theme="a" data-icon="carat-r">
+		          <option value="5">Distance - 5 Miles</option>
+		          <option value="10">Distance - 10 Miles</option>
+		          <option value="25">Distance - 25 Miles</option>
+		        </select>
+		      </div>
+
+		      <div data-role="fieldcontain" class="selectmenu">
+		        <select name="oppsentiment" id="oppsentiment" data-native-menu="false" data-theme="a" data-icon="carat-r">
+		          <option value="all">News Sentiment - All</option>
+		          <option value="pos">News Sentiment - Positive</option>
+		          <option value="neg">News Sentiment - Negative</option>
+		        </select>
+		      </div>
+
+		      <div data-role="fieldcontain" class="selectmenu">
+		        <select name="oppskill" id="oppskill" data-native-menu="false" data-theme="a" data-icon="carat-r">
+		          <option value="all">Skill Level - All</option>
+		          <option value="high">Skill Level - High</option>
+		          <option value="medium">Skill Level - Medium</option>
+		          <option value="low">Skill Level - Low</option>
+		        </select>
+		      </div>
+
+		      <div data-role="fieldcontain" class="selectmenu">
+		        <select name="select-choice" id="opprating" data-native-menu="false" data-theme="a" data-icon="carat-r">
+		          <option value="none">Account Rating - All</option>
+		          <option value="hot">Account Rating - Hot</option>
+		          <option value="warm">Account Rating - Warm</option>
+		          <option value="cold">Account Rating - Cold</option>
+		        </select>
+		      </div>
+
+		<div class="wrapper">
+			<div data-theme="c" id="bestbets"  class="ui-btn ui-btn-c ui-shadow ui-corner-all"><i class="fa fa-star"></i> view best bets</div>
+		</div>
+
+		<div class="wrapper">
+			<div data-theme="f" id="submitfilter" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">submit</div>
+			<div data-theme="c" id="cancelfilter"  class="ui-btn ui-btn-c ui-shadow ui-corner-all half">cancel</div>
+		</div>
+
+
+			</li>
+		</ul>
+	
+
+	</div>
+  </div>
+
+<script>
+
+	// For JS encoder
+	var immune;
+
+	// Navigation for filters
+    $('#submitfilter').on("tap", function() { 
+    	// Refresh the list based on filter settings
+    	
+    	// Reset top matching count UI
+    	$('#eventcount').text('');
+    	
+    	// Reset fitler title shown to user
+    	$('#viewTitle').text('');
+    	loadLocalEntities();
+    	$.mobile.changePage( "#scoutpage", { transition: "slideup", reverse: false, changeHash: false });
+    });
+    
+    $('#bestbets').click(function() {
+    
+      	// Reset top matching count UI
+    	$('#eventcount').text('');
+    	
+    	// Reset fitler title shown to user
+    	$('#viewTitle').text('');
+    	
+    	$('#oppskill').val('high');
+    	$('#opprating').val('hot');
+
+    	$('#oppskill option[value=high]').attr('selected','selected');
+    	$('#opprating option[value=hot]').attr('selected','selected');
+
+    	$('#oppskill').selectmenu("refresh", true);
+    	$('#opprating').selectmenu("refresh", true);
+    	
+    	loadLocalEntities();
+    	$.mobile.changePage( "#scoutpage", { transition: "slideup", reverse: false, changeHash: false });
+    });
+    
+    $('#cancelfilter').click(function() {
+    	$.mobile.changePage( "#scoutpage", { transition: "fade", reverse: false, changeHash: false });
+    });
+	// End navigation for filters
+	
+	
+	
+	function toTitleCase(str)
+	{
+	    return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+	}
+
+	function distance(lat1, lon1, lat2, lon2, unit) {
+		var radlat1 = Math.PI * lat1/180
+		var radlat2 = Math.PI * lat2/180
+		var radlon1 = Math.PI * lon1/180
+		var radlon2 = Math.PI * lon2/180
+		var theta = lon1-lon2
+		var radtheta = Math.PI * theta/180
+		var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+		dist = Math.acos(dist)
+		dist = dist * 180/Math.PI
+		dist = dist * 60 * 1.1515
+		if (unit=="K") { dist = dist * 1.609344 }
+		if (unit=="N") { dist = dist * 0.8684 }
+		return dist
+	}
+	
+	var socialCondition = 0;
+	var skillCondition = 0;
+	
+	function renderMatchCount()
+	{
+		$('#eventcount').hide();
+		
+		if (socialCondition == 1 && skillCondition == 1)
+		{
+			console.info('Doing head info counter render');
+			
+			// Show the count for matching opps
+		    if ($('.appointmentopp').length > 0)
+			{
+				$('#eventcount').text($('.appointmentopp').length + ' Nearby Opportunities');
+				$('#eventcount').fadeIn();
+			}
+			else {
+				$('#eventcount').text('No Nearby Opportunities');
+				$('#noresults').fadeIn();
+			}
+			
+			// Show the event list
+			//$('#events').fadeIn();
+		}
+	}
+	
+				  function renderBigEvent(accountSpecificData, value) {
+				  
+				  	  accountSetimentScore = 0;
+				  	  setimentCount = 0;
+				  	  
+				  	  console.info(accountSpecificData);
+				  
+					  for (var i = 0; i < accountSpecificData.length; i++) {
+
+						// Check if something with large sentiment happened
+					  	if (accountSpecificData[i].setiment > 1 || accountSpecificData[i].setiment < -1)
+					  	{
+					  		//console.log('Major event found for ' + value);
+					  		setimentCount += 1;
+					  	}
+					    accountSetimentScore += accountSpecificData[i].setiment;
+					  }
+					  
+					  // Add some weight based on total items
+					  if (setimentCount != 0)
+					  {
+						  accountSetimentScore = accountSetimentScore / setimentCount;
+						  console.info(accountSetimentScore);
+					  }
+					  
+				  	  
+				  	  return accountSetimentScore;
+				  }
+	
+	
+	
+	
+		/* Update display to show match to skill set via badges */		
+		var renderEventSkills = function() {
+
+			var oppIds = [];
+			
+			$('.appointmentopp').each(function () {
+		       oppIds.push($(this).data('oppid'));
+		  	});
+		  	
+			Visualforce.remoting.Manager.invokeAction(
+		        '{!$RemoteAction.s1m_scout.getUserBadges}', 
+		        function(resultUserBadge, event){
+		            if (event.status) {
+		                
+		                // Get User Badges
+		               	Visualforce.remoting.Manager.invokeAction(
+					        '{!$RemoteAction.s1m_scout.getRequiredBadges}', 
+					        oppIds,
+					        function(resultOptyProducts, event){
+					            if (event.status) {
+
+					                doneCounter = $('.appointmentopp').length;
+					                
+					                $('.appointmentopp').each(function () {
+								       	
+								       	currentOpty = $(this).data('oppid');
+								       	
+								       	var productsWithOpty = $.grep(resultOptyProducts[0], function(v) {
+										    return v[0] == currentOpty;
+										});
+																				
+										var badgesForOppty = [];
+										var opptyWithNoBadges = [];
+										var totalOpptyBadgeMatch = 0;
+										
+										if (productsWithOpty.length > 0)
+										{
+											// Products for the oppty
+											$.each(productsWithOpty, function( i, val ) {
+												
+												// Get the badges needed for each Oppty
+												$.each(resultOptyProducts[1], function( i, productBadgeMap ) {
+													if (productBadgeMap[1] == val[1])
+													{
+														badgesForOppty.push(productBadgeMap[0]);
+														
+														// Check against badges earned by the user
+														$.each(resultUserBadge, function( i, userEarned ) {
+														    if (userEarned == productBadgeMap[0]) {
+														    	totalOpptyBadgeMatch += 1;
+														    }
+														});
+													}
+												});
+											});
+																						
+											var badgeScore = totalOpptyBadgeMatch / badgesForOppty.length;
+											
+											skillFilterValue = $('#oppskill').val();
+											
+											if (badgeScore > .75)
+										    {
+										    	$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-pos1');
+										    }
+										    else if (badgeScore > .5)
+										    {
+										    	if (skillFilterValue == 'high')
+										    	{
+										    		$("li.appointmentopp[data-oppid='" + currentOpty + "']").remove();
+										    	}
+										    	else
+										    	{										    
+										      		$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-pos0');
+										      	}
+										    }
+										    else if (badgeScore == .5)
+										    {
+										    	if (skillFilterValue == 'high')
+										    	{
+										    		$("li.appointmentopp[data-oppid='" + currentOpty + "']").remove();
+										    	}
+										    	else
+										    	{										    
+										      		$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-50');
+										      	}
+										    }
+										    else if (badgeScore >= .25) {
+										    	if (skillFilterValue == 'high' || skillFilterValue == 'medium')
+										    	{
+										    		$("li.appointmentopp[data-oppid='" + currentOpty + "']").remove();
+										    	}
+										    	else
+										    	{											    
+										      		$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-neg0');
+										      	}
+										    }
+										    else {
+										    	if (skillFilterValue == 'high' || skillFilterValue == 'medium')
+										    	{
+										    		$("li.appointmentopp[data-oppid='" + currentOpty + "']").remove();
+										    	}
+										    	else
+										    	{											    
+											      	$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-neg1');
+											    }
+										    }
+											
+										}
+										else
+										{
+											console.info('no products on opty ' + currentOpty);
+											$("li.appointmentopp[data-oppid='" + currentOpty + "'] .education").addClass('indicator-font-no-product');
+										}
+										
+										if (!--doneCounter) {
+											skillCondition = 1;
+											renderMatchCount();
+										}
+																																	       
+								  	});								  	
+								  			                
+					            } else if (event.type === 'exception') {
+					                console.log(event.message);
+					            } else {
+					                console.log(event.message);
+					            }
+					        }, 
+					        {escape: true}
+				    	);
+		                
+		            } else if (event.type === 'exception') {
+		                console.log(event.message);
+		            } else {
+		                console.log(event.message);
+		            }
+		        }, 
+		        {escape: true}
+	    	);
+	    		    	    	
+    	};
+    	// renderEvent skills 
+		
+		//function renderEventNews() {
+		
+		var renderEventNews = function() {
+			var output =[];
+	     	var $accountIds =[]; 
+
+		    $('div.event').map(function (i){
+		        if(typeof $(this).data('accountid') == 'string') { 
+		            if ($(this).data('accountid') != null) {
+		            	$accountIds[i] = $(this).data('accountid');
+		           	}
+		        }
+		    });
+		    output.push($.unique($accountIds));
+		    			
+			var url = '{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/api/getevents?daysago=31&accounts=' + output.toString();
+			//$.get(url, function( data ) {
+			
+			getIgnition(url, '', 'GET', function( data ) {	
+			  
+			  doneCounter = $.unique($accountIds).length;
+			  
+			  // Loop through results by account
+			  $.each($.unique($accountIds), function( key, value ) {
+
+			      // Filter the data for the given account and get a count
+			      accountSpecificData = data.filter(function (el) {
+					  return el.accountid == value;
+					});
+					
+				  var accountSetimentScore = 0;
+				  
+				  // Count major events
+				  var setimentCount = 0;
+				  
+				  // Send the total data for the node, as well as the actual DOM node (then use - $('#block' + value))
+				  accountSetimentScore = renderBigEvent(accountSpecificData, value);
+				  			      
+			      // TODO - can perform the news level filtering here...
+			      sentimentFilterValue = $("#oppsentiment").val();
+			      
+				 	var codeClass = '';
+				 	
+					 	if (accountSetimentScore >= .5) {
+					 	
+					 		// Remove if the user has Filtered to only see Negative
+					 		if (sentimentFilterValue == 'neg')
+					 		{
+								$('#block' + value).remove();
+								return;
+					 		}
+					 		
+						 	if (accountSetimentScore >= 2.5)
+						 	{
+						 		codeClass = 'indicator-pos1';
+						 	}
+							else
+							{
+								codeClass = 'indicator-pos0';
+							}
+						}
+					 	else if (accountSetimentScore <= -0.5) {
+					 	
+					 		// Remove if the user has Filtered to only see Positive
+					 		if (sentimentFilterValue == 'pos')
+					 		{
+								$('#block' + value).remove();
+								return;
+					 		}
+					 	
+						 	if (accountSetimentScore <= -2.5)
+						 	{
+						 		codeClass = 'indicator-neg1';
+						 	}
+							else
+							{
+								codeClass = 'indicator-neg0';
+							}
+						}	
+						else {
+							codeClass = 'indicator-neutral';
+						}								
+
+						$('div.event.account.news.' + value).addClass(codeClass);		
+											
+			      
+			      // Hide the loader
+			      $('.eventloading').hide();
+				  
+		  		if (!--doneCounter) {
+					socialCondition = 1;
+					renderMatchCount();
+				}	
+
+				
+			  });
+			  
+			});
+						
+		};
+		// End render event news	
+	
+		function bindTouchEvents() {
+
+			// Create account links
+			$('h2.accountname').on("tap", function() {
+				sforce.one.navigateToSObject($.encoder.encodeForJavascript($(this).data("accountid")));				
+			});
+			
+			// Create oppty links
+			$('div.oppname').on("tap", function() {
+				sforce.one.navigateToSObject($.encoder.encodeForJavascript($(this).data("opportunityid")));
+			});		
+		}
+	
+	
+	
+	function loadLocalEntities() {
+	
+		// Reset list
+		$('#events').html('');
+		$('#noresults').hide();
+		$('#events').hide();
+		$('#mainloader').show();
+	
+		var lat, lon;
+	
+             if (navigator.geolocation) {
+                          
+                 navigator.geolocation.getCurrentPosition(
+                     function(position){
+                     
+                     console.log('going into position');
+                     
+                     lat = position.coords.latitude;
+                     lon = position.coords.longitude;
+                     
+                     console.log('geo lat: ' + lat + ', ' + lon);
+
+                     // Get filter settings
+                     oppIndustryValue = 'none';
+                     oppRatingValue = $('#opprating').val();
+                     distanceValue = $('#oppdistance').val();
+                     oppSkillValue = $('#oppskill').val();
+                     sentimentFilterValue = $('#oppsentiment').val();
+                     // Update filter UI
+                     
+                     filterCopy = '';
+                     
+                     if (oppRatingValue != 'none')
+                     {
+                     	filterCopy += toTitleCase(oppRatingValue) + ' Rating, ';
+                     }
+                     if (oppSkillValue != 'none')
+                     {
+                     	filterCopy += toTitleCase(oppSkillValue) + ' Skill, ';
+                     }
+                     if (sentimentFilterValue != 'all')
+                     {
+                     	filterCopy += toTitleCase(sentimentFilterValue) + ' News ';
+                     }
+                     
+                     // Default
+                     if (filterCopy == '')
+                     {
+                     	filterCopy = 'At Companies with';
+                     }
+                     
+                     $('#viewTitle').text(filterCopy + 'in ' + distanceValue + 'mi');
+                     
+                     Visualforce.remoting.Manager.
+                     invokeAction(
+                         '{!$RemoteAction.s1m_scout.getLocalOpportunities}', 
+                         lat, lon, distanceValue, oppIndustryValue, oppRatingValue,
+				        function(matches, event){
+				            
+							console.info(matches);
+				            
+				            // Able to get results
+				            if (event.status) {
+
+							var leadList = '';
+		
+			            	// Do all other events for population of Events view...
+							$.each(matches, function() {
+								
+								// Distance to the lead
+								locDistance = distance(lat, lon, this.Latitude, this.Longitude, 'M');
+																
+								leadList += '<ul data-role="listview" class="sololist" data-inset="true" id="block' + $.encoder.encodeForHTML(this.Id) + '">' +
+											'<li class="appointment" data-eventid="' + $.encoder.encodeForHTMLAttribute(this.Id) + '" data-oppid="' + $.encoder.encodeForHTMLAttribute(this.Id) + '">' +
+											'	<div class="dateband">' +
+											'		<h1 onclick="sforce.one.navigateToURL(\'/apex/s1m_scout_map?opportunityid=' + $.encoder.encodeForJavascript(this.Id) + '\');">' +
+											'			<div class="drivemap">' + 
+											'			<img src="{!URLFOR($Resource.stylepack, 'stylepack/img/magellan-icon-no-bg.png')}"/>' +
+											'			</div>' +
+											'		</h1>' +
+											'	</div>' +
+											'	<div class="blockdetail copilot">' +
+											'        <h2 class="accountname" data-accountid="' + $.encoder.encodeForHTML(this.Id) + '">' + $.encoder.encodeForHTML(this.AccountName) +
+											'</h2><p style="margin-top: -4px;">' + locDistance.toFixed(1) + ' miles</p>';
+																						
+								// Keep going with remainder of list
+								leadList += '   </div>' +
+											'   <div class="kpiright">' +
+											'		<div class="circle">' +
+											'			<div class="circlewrap">' +
+											'				<div class="event account news ' + $.encoder.encodeForHTML(this.Id) + 
+											'" data-accountid="' + $.encoder.encodeForHTML(this.Id) + '"  onclick="sforce.one.navigateToURL(\'/apex/s1m_metro_news?id=' + $.encoder.encodeForJavascript(this.Id) + '\');">' +
+											'					<div class="newsicon"></div></div>' +
+											'			</div>' +
+											'		</div>' +
+											'	</div>' +
+											'</li>';
+																						
+											parentId = $.encoder.encodeForHTML(this.Id);
+											
+											// Get Opportunities within an Account matching basic filtering (e.g. not social / skill, as those
+											// are done client side - based on data from Heroku and calculations around badges client side)
+											$.each(this.Opp, function() {
+												leadList += '<li class="appointmentopp" data-oppid="' + $.encoder.encodeForHTML(this.Id) + '"><div class="oppname" data-opportunityid="' + 
+															$.encoder.encodeForHTML(this.Id) + '">' + $.encoder.encodeForHTML(this.Name) + '</div>' + 
+															'   <div class="kpiright opp">' +
+															'				<div class="education account' + parentId + '" data-opportunityid="' + 
+															$.encoder.encodeForHTML(this.Id) + '" data-accountid="' + parentId + '" onclick="sforce.one.navigateToURL(\'/apex/s1m_deal_fuel?id=' + $.encoder.encodeForHTML(this.Id) + '\');">' +
+															'					<i class="fa fa-circle dealfuel"></i>' +
+															'		</div>' +
+															'	</div>' +
+															'</li>';
+											});								
+											
+								leadList += '</ul>';
+							});
+							
+							if (matches.length < 1)
+							{
+								$('#eventcount').text('No Nearby Opportunities');
+								$('#noresults').fadeIn();
+							}
+							
+							$('#events').append($(leadList));
+				    		$('#events').trigger('create');
+							
+		
+							// Queue UI updates to get the correct match count							
+							$.when( renderEventNews() ).done(function() {
+    							console.info('news done');
+    							
+    							$.when(renderEventSkills() ).done(function() {
+									console.info('skills done');
+									$('#mainloader').hide();							
+				    				$('#events').fadeIn();
+				    				bindTouchEvents();
+    							});
+  							});
+							
+							
+							
+			            	
+			            } else if (event.type === 'exception') {
+			                // Error...
+			                console.log('Error');
+			            } else {
+			                // Error...
+			                console.log('Error');
+			            }
+			        }, 
+			        {escape: true}
+		                      );
+		                  });
+              } else {
+  	
+  					// TODO - message that geolocation is not avail...
+                    lat = 37.77493;
+                    lon = -122.419416;                    
+                    var result = [];
+              }     
+        }
+		
+		$(function() {
+			loadLocalEntities();
+		});
+		
+</script>
+	
+	
+	<!--  Footer includes --> 	
+	<style>
+	
+	/* For ONLY this page */
+	#scoutpage {
+		min-height:600px ! important;
+	}
+	
+	#noresults {
+		display: none;
+	}
+	
+	#bestbets
+	{
+text-align: left;
+padding: 12px;
+background: #F0F1F2;
+color: #333;
+font-size: 13px;
+padding: 12px;
+	}
+	
+	
+	.ui-listview > li.ui-first-child img:first-child:not(.ui-li-icon) {
+-webkit-border-top-left-radius: 0px;
+border-top-left-radius: 0px;
+height: 26px;
+}
+	
+	img.newsfilter {
+	width: 24px;
+margin-left: 14px;
+margin-top: 12px;
+	}
+	
+	div.wrapper {
+		float: left;
+	}
+	
+	#eventcount {
+		min-height: 19px;
+	}
+		
+	div.event div.newsicon {
+		width: 36px;
+	}
+	
+	div.event.account.news {
+		background: #f9f9f9;
+	}
+	
+		.ui-listview > li h2.accountname {
+			margin-top: 10px;
+		}
+	
+		i.filtericon
+		{
+			margin-top: 10px; 
+			font-size: 1.6em;
+			margin-left: 14px;		
+		}
+	
+	
+		li.appointmentopp {
+			font-size: 14px;
+			padding: 1.3em 1em;
+		}
+
+		li.appointmentopp .kpiright.opp {
+			top: -10px;
+		}
+	
+		div.drivemap {
+			/*border-radius: 100px;*/
+			width: 44px;
+			height: 34px;
+			padding-top: 10px;
+			font-size: 1.4em;
+			line-height: 1.6em;
+			color: #fff;
+			color: #777;
+		}
+	
+		li.appointment, li.appointment.ui-li-static.ui-body-inherit.ui-first-child {
+			padding: 4px 14px;
+			
+		}
+		
+		div.dateband {
+color: #333;
+width: 26px;
+padding: 0px 20px 0px 5px;
+text-align: center;
+position: absolute;
+left: 0px;
+		}
+		
+		div.dateband h1 {
+			font-size: .9em;
+		}
+		
+		div.circle {
+			margin-top: -6px;
+		}
+		
+		div.oppname {
+			width: 84%;
+		  white-space: nowrap;
+		  overflow: hidden;
+		  text-overflow: ellipsis;
+		  padding: 4px 0px;
+		}
+		
+		.ui-btn.half
+		{
+			width: 40%;
+			float: left;
+		}
+		
+		.ui-btn.half:last-child
+		{
+			float: right;
+		}
+
+/* SELECT LISTS */		
+		.ui-field-contain, .ui-mobile fieldset.ui-field-contain {
+padding: .4em 0;
+}
+
+html .ui-page-theme-a .ui-btn, html body .ui-group-theme-a .ui-btn
+{
+	background: #F0F1F2;
+	color: #333;
+	border-color: #ccc;
+}
+/* END SELECT LISTS */
+
+	/* // For ONLY this page */
+
+
+/* START --- GENERAL SELECT MENU */
+html .ui-page-theme-a div.selectmenu a.ui-btn {
+text-align: left;
+padding: 13px;
+background: #fff;
+color: #333;
+font-weight: normal;
+border: 1px solid #dfe0e1;
+font-size: 13px;
+}
+
+.ui-icon-carat-r:after {
+background-image: url('{!URLFOR($Resource.stylepack, 'stylepack/img/select-carat-icon.png')}');
+}
+
+.ui-btn-icon-left:after, .ui-btn-icon-right:after, .ui-btn-icon-top:after, .ui-btn-icon-bottom:after, .ui-btn-icon-notext:after {
+ background-color: transparent;
+ background-position: center center; 
+background-repeat: no-repeat;
+ -webkit-border-radius: 0px;
+border-radius: 1em;
+}
+
+ul.ui-selectmenu-list li a {
+	font-size: 14px;
+	font-weight: normal;
+	padding: 14px;
+}
+
+/* END --- GENERAL SELECT MENU */
+
+	div.news {
+		background: #f9f9f9;
+		border-radius: 5px;
+		float: left;
+		text-align: center;
+		font-size: 2em;
+		line-height: 1.6em;
+		transition: background 1s ease;
+		transition: background-color 1s ease;
+	}
+
+	div.news .newsicon {
+		height: 41px;
+		opacity: .8;
+	}
+	
+
+.ui-icon-carat-d:after
+{
+	background-image: none;
+}
+
+
+		body .ui-radio2 .ui-btn.ui-btn-c
+		{
+			/* background: #2A93D5; */
+			border-color: transparent;
+			color: #333;
+			
+			background: #fff;				
+		}
+		
+		div.ui-radio2 {
+			float: left;
+		}
+		
+		body .ui-radio2 .ui-btn.ui-btn-c, body .ui-radio2 .ui-btn.ui-btn-c:active, body .ui-radio2 .ui-btn.ui-btn-c:hover
+		{
+			background: #fff;
+			color: #333;
+			border: 1px transparent;
+		}		
+
+
+		h2.subtext.ui-title {
+			width: 100%;
+			margin: auto;
+		}	
+		
+div.kpiright.opp .dealfuel
+{
+	transition: color 0.5s ease;
+}		
+	
+
+		.indicator-font-neg1 {
+			color: #E15D76 ! important;
+			transition: color 0.5s ease;
+		}
+
+		.indicator-font-neg0 {
+			color: #E1BE5C ! important;
+			transition: color 0.5s ease;
+		}
+
+		.indicator-font-neutral {
+			color: #E3E1E2 ! important;
+			transition: color 0.5s ease;
+		}
+		
+		.indicator-font-50
+		{
+			color: #F3AE4E ! important;
+			transition: color 0.5s ease;
+		}
+		
+		.indicator-font-no-product {
+			color: #eeeeee ! important;
+			transition: color 0.5s ease;
+		}
+
+		.indicator-font-pos0 {
+			color: #B8EB9F ! important;
+			transition: color 0.5s ease;
+		}
+
+		.indicator-font-pos1 {
+			color: #4BC076 ! important;
+			transition: color 0.5s ease;
+		}	
+	
+		.indicator-neg1 {
+			background: #E15D76 ! important;
+		}
+
+		.indicator-neg0 {
+			background: #E1BE5C ! important;
+		}
+
+		.indicator-neutral {
+			background: #E3E1E2 ! important;
+		}
+
+		.indicator-pos0 {
+			background: #B8EB9F ! important;
+		}
+
+		.indicator-pos1 {
+			background: #4BC076 ! important;
+		}		
+		
+		div.event .dealfuel {
+			opacity: .5;
+			color: #fff;
+			font-size:1.8em;
+			margin-top: 5px;
+		}
+
+		div.kpiright.opp .dealfuel {
+			opacity: 1;
+			font-size:1.4em;
+			margin-top: 5px;
+			margin-top: 20px;
+			margin-left: 14px;
+		}
+	
+		.dotwrapper {
+			text-align:center;
+			margin-top: -20px;
+		}
+	
+		.dotmarker {
+			color:#344A5F;
+			font-size: 4em;
+		}
+	
+	
+	
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+
+		div.optionstop {
+			margin-bottom: -10px;
+			margin-top:4px;
+		}
+		
+		i.fa.fa-car {
+			font-size: 2em;
+			margin-top: 10px;
+		}
+	
+		a.filtericon span.icon-utility-filter {
+			color: #333;
+		}
+
+		div.headicon {
+			text-align: center;
+		}
+
+		div.headicon i.fa {
+			margin-top: 12px;
+		}
+		
+		div.headicon
+		{
+			border-radius: 5px;
+	        width: 60px;height: 60px; margin: auto; background-size: 100%;
+	        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+			border-radius: 5px;
+			background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+	        background-size: 60px 60px;
+	        background-color:#53b6d7;font-size:2.4em;text-align:center;
+		}
+		
+			.headicon-scout {
+		border-radius: 5px;
+        width: 60px;height: 60px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+        background-image: url('{!URLFOR($Resource.stylepack, 'stylepack/img/scout-7-120-nbg.png')}');
+	        background-size: 60px 60px;
+	        background-color:#53b6d7;font-size:2.4em;text-align:center;
+    }
+		
+	
+		.dotwrapper {
+			text-align:center;
+			margin-top: -20px;
+		}
+	
+		.dotmarker {
+			color:#344A5F;
+			font-size: 4em;
+		}
+	
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+
+	
+		.badge0 {
+			background: #E15D76 ! important;
+		}
+
+		.badge50 {
+			background: #E1BE5C ! important;
+		}
+
+		.badge100 {
+			background: #8BCF6A ! important;
+		}
+
+	
+		div.contacticons {
+			font-size: 2em;
+			color: #333;
+		}
+	
+		div.accountdetail {
+			background:#fff;
+			padding:4px;
+			z-index:99;
+			border:1px solid #f5f5f6;
+			margin-bottom: 20px;
+			width: 90%;
+			margin-left:4%;
+			-webkit-border-bottom-right-radius: 5px;
+			-webkit-border-bottom-left-radius: 5px;
+			-moz-border-radius-bottomright: 5px;
+			-moz-border-radius-bottomleft: 5px;
+			border-bottom-right-radius: 5px;
+			border-bottom-left-radius: 5px;
+		}
+		
+		.ui-content .ui-listview-inset, .ui-panel-inner > .ui-listview-inset {
+			margin: 1em 0em 1em 0em;
+		}
+	
+		div.eventloading {
+			width: 36px;
+			height: 36px;
+			background-position:center;
+			background-repeat: none;
+			border-radius: 36px; 
+		}
+	
+	
+
+		
+		div.dateband h1 {
+			margin-right: -14px;
+		}
+	
+		li.appointment {
+			/* min-height: 100px; */
+			
+		}
+	
+		div.circle {
+		background:none; color:#ccc;width:30px;height:30px;border-radius:50px;
+				padding-top:0px;margin:auto; font-size:1em;line-height:2em;margin-right: 10px;
+		}
+	
+		.kpiright {
+			color:#eee;width:38px; 
+        	padding-right: 20px;text-align:center;height: 100%; position: absolute;right:0px;top:0px;
+		}
+	
+		div.education {
+			height: 40px;
+			width: 40px;
+			margin-top: 3px;
+		}
+	
+		div.event {
+			height: 40px;
+			width: 40px;
+			background: #ddd;
+			border-radius: 5px; 
+			color: #333;
+		}
+		
+		div.circlewrap {
+			margin: 10px;
+/*			background: #efefef; */
+/*			border: 1px solid #ddd; */
+			height: 40px;
+			width: 40px;
+			border-radius: 5px;			
+		}
+	
+		
+		div.circlewrap {
+			height:18px;
+			width:36px;
+			margin-top: 12px;
+			margin-bottom: 1px;
+		     border-radius: 0 0 36px 36px;
+		     -moz-border-radius: 0 0 36px 36px;
+		     -webkit-border-radius: 0 0 36px 36px;
+		}
+		
+		div.setimentpos1 {
+			background: #4CC3C7;
+		}
+
+		div.setimentneg1 {
+			background: #F49756;
+		}
+		
+		div.blockdetail.copilot {
+			margin-right: 40px;
+			margin-left: 40px;
+		}
+		
+		div.blockdetail.innerdetail
+		{
+			margin-left: 0px;
+			margin-right: 0px;
+		}
+		
+		
+	span.filter {
+font-size: 24px;
+line-height: 1.6em;
+float: right;
+margin-right: 14px;
+margin-top: -2px;
+color: #333;
+}		
+
+		
+		div.libfolder div {
+			float:left;
+			width: 100%;
+			border-top:1px solid #F0F1F2;
+			padding:12px;
+			margin-left: -12px;
+			color: #2a94d6;
+		}	
+	
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		
+
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icon-utility.ttf')}");
+		}
+		
+		.event-sig-neg {
+			border-bottom: 3px solid #c75267;
+			height: 37px;
+		}
+		
+		.event-sig-pos
+		{
+			/* -20 HSB - for B in PSD */
+			border-bottom: 3px solid #378c56;
+			height: 37px;
+		}
+		
+		
+	
+	
+/*	div.toolbar i.fa {
+		font-size: 1.8em;
+		padding: 10px;
+	}*/
+	
+
+	
+	div.toolbar i.fa {
+		font-size: 1.6em;
+		padding: 11px 0px 12px 0px;
+	}
+	
+	.headicon-wrap {
+		width: 60px;height: 60px; margin: auto;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+border-radius: 5px;
+background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+background: linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+padding-bottom: 14px;
+	}
+	
+    
+html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-a.toolbar.center, html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-b.toolbar.center {
+color: #fff;
+text-align: center;
+background: #293f54;
+border-top: 1px solid #203345;
+}
+
+html .ui-bar-a, html .ui-page-theme-a .ui-bar-inherit, html .ui-bar-a .ui-bar-inherit, html .ui-body-a .ui-bar-inherit, html body .ui-group-theme-a .ui-bar-inherit {
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);
+}    	
+	
+	
+	
+		.newsicon {
+		background-image: url('{!URLFOR($Resource.stylepack, 'stylepack/img/news-icon.png')}');
+		width: 36px;
+		background-size: 70%;
+		background-repeat: no-repeat;
+		background-position: 6px 8px;
+	}
+	
+	</style>
+
+	<!--  // End Footer includes -->
+	
+	
+	
+</apex:page>

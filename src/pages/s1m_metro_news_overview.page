@@ -1,0 +1,879 @@
+<apex:page standardController="Account" extensions="s1m_metro_news" 
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="true" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false" manifest="/apex/CacheManifest">
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/icons.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.mobile-1.4.0-rc.1.js')}"></script>
+
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/Class.create.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery-encoder-0.1.0.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.timeago.js')}" type="text/javascript"></script>
+	
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.xcolor.min.js')}"></script>
+			
+	<script>
+	// **** START AJAX wrapper with Token ****
+		var s1token = window.localStorage.getItem('s1token');
+		var s1tokenexpires = window.localStorage.getItem('s1tokenexpires');
+	
+		function getNewToken(callback) {
+			$.ajax({
+				type: "GET",
+				cache: false,
+				dataType: "json",
+				url: "{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/token?sessionId={!$Api.Session_ID}&serverUrl={!$Api.Partner_Server_URL_80}",
+				success: function(s1token){
+					console.info(s1token);
+					window.localStorage.setItem('s1token', s1token.token);
+					window.localStorage.setItem('s1tokenexpires', s1token.expires);
+					callback();
+				}
+			});
+		}
+		
+		function authenticate(callback) {
+			if (s1token) {	
+				if (s1tokenexpires < Date.now()) { getNewToken(function() { callback(); }); }
+				else { callback(); }
+			}
+			else
+			{
+				getNewToken(function() { callback(); });			
+			}
+		}
+	
+		function getIgnition(requestUrl, dataBundle, requestMethod, callback) {
+		    authenticate(function() {
+			    $.ajax({
+		       		url: requestUrl,			    
+			        async: false,
+			        data : dataBundle,
+			        type: requestMethod,
+			        dataType: 'json',
+					headers: { 'x-access-token' : window.localStorage.getItem('s1token'), 'x-access-user' : '{!$User.UserName}'},
+			        success: function (data) {
+			            callback(data);
+			        }
+			    });
+			}); 
+		};
+	// **** END AJAX wrapper with Token ****
+	</script>	
+	
+	<script>
+	    $(document).bind("mobileinit", function(){
+			$.mobile.pushStateEnabled = false;
+		});
+	</script>	
+	
+
+  <div data-role="page" id="mainpage">
+
+
+    <div data-role="header">
+      
+        <div class="headicon-wrap">
+        	<div class="headicon-news"> 
+        	</div>
+        </div>
+      
+      <h1>Headlines</h1>
+            
+      <h2 class="subtext"><span id="matchCount"></span> Accounts</h2>
+        
+    </div>
+
+    <div data-role="content">
+
+      	
+	<div class="loader" id="mainloader"></div>
+
+
+      
+              <div class="ui-grid-a optionstop" id="filterbar">
+                  <div class="ui-block-a" style="width:85%;padding-left:14px;"><div id="filtersetting" class="wrapper">
+                  	<h2 id="viewTitle"></h2>
+                  </div></div>
+                  <div class="ui-block-b" style="width:15%;"><div style="margin: 12px 6px 0 20px;color:#333;font-size:1.4em;">
+                  	  <a href="#filter" data-transition="slidedown"><span class="icon-utility-filter filter"></span></a>
+                  </div></div>
+              </div>
+            			
+      
+      <h2 class="topnewsheading">Top Stories</h2>
+      <div id="owl-demo" class="owl-carousel">
+      </div>
+      			
+      <ul data-role="listview" data-inset="true" id="list" style="display:none;">
+      </ul>
+      
+    </div>
+
+</div>
+
+  <div data-role="page" id="filter">
+  
+    <div data-role="content">  	
+  	
+  		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" style="padding:0px">
+  			<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+				<h2>Filter News</h2>
+			</li>
+			<li class="selecteditemslist">
+	            <div class="libfolder"><div style="border-top: 0px solid #F0F1F2; margin-top: -14px;" onclick="getNewsAccounts('', 'Recently Viewed Accounts');$.mobile.navigate('#mainpage');">Recently Viewed Accounts</div></div>
+	            <div class="libfolder"><div onclick="getNewsAccounts('thisquarter', 'Current Quarter Close');$.mobile.navigate('#mainpage');">Current Quarter Close</div></div>
+	            <div class="libfolder"><div onclick="getNewsAccounts('stagenegotiation', 'In Negotiation');$.mobile.navigate('#mainpage');">In Negotiation</div></div>
+	            <div class="libfolder"><div onclick="getNewsAccounts('last90', 'Viewed Last 90 Days');$.mobile.navigate('#mainpage');">Viewed Last 90 Days</div></div>
+	            <div class="libfolder"><div onclick="getNewsAccounts('meetingtoday', 'Meeting with Today');$.mobile.navigate('#mainpage');">Meeting with Today</div></div>
+			</li>
+		</ul>
+	
+		<div class="wrapper">			
+			<div data-theme="f" id="cancel" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">cancel</div>
+		</div>
+
+	</div>
+  </div>
+
+
+
+        <script type="text/javascript">
+
+			// For JS encoder
+			var immune; 
+			
+			
+			function htmlDecode(input){
+			  var e = document.createElement('div');
+			  e.innerHTML = input;
+			  return e.childNodes.length === 0 ? "" : e.childNodes[0].nodeValue;
+			}
+
+
+			function sortResults(prop, asc) {
+			    allNewsJson = allNewsJson.sort(function(a, b) {
+			        if (asc) return (a[prop] > b[prop]) ? 1 : ((a[prop] < b[prop]) ? -1 : 0);
+			        else return (b[prop] > a[prop]) ? 1 : ((b[prop] < a[prop]) ? -1 : 0);
+			    });
+			    return allNewsJson;
+			}
+
+			var getLocation = function(href) {
+			    var l = document.createElement("a");
+			    l.href = href;
+			    return l;
+			};
+			
+			function bindFeatLinks()
+			{
+									// Bind touch to line items
+									$('a.linkitem.twitter').on('click', function(event){
+										var newsUrl = 'https://twitter.com/' + $.encoder.encodeForJavascript($(this).data("author")) + '/status/' + $.encoder.encodeForJavascript($(this).data("tweetid"));
+										//console.info('Featured Twitter Click - ' + newsUrl);
+										sforce.one.navigateToURL(newsUrl);	
+									});
+										
+									// Bind touch to line items
+									$('a.linkitem.web').on('click', function(event){
+										var newsUrl = $(this).data("newsurl");
+										//console.info('Featured News Click - ' + newsUrl);
+										sforce.one.navigateToURL(newsUrl);	
+									});	
+									
+									$('#mainloader').hide();  						                                      
+							        $('#list').fadeIn();			
+			}
+
+            var owl = $(".owl-carousel");
+            var allNewsJson;
+                        
+            function getTopNews(newsAccountIds)
+            {
+            
+            	
+            				    var urlTop = '{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/api/gettopnewsevents';
+
+								getIgnition(urlTop, {'accounts': newsAccountIds, 'source' : 1, 'importance' : 1, 'daysago' : 7, 'limit' : 10}, 'POST', function( jsonTwitter ) {
+
+					                owl.owlCarousel();
+				
+									console.info('---- JSON Twitter Results ----');
+									console.info(jsonTwitter);
+				
+				                        
+									getIgnition(urlTop, {'accounts': newsAccountIds, 'source' : 0, 'importance' : 1, 'daysago' : 7, 'limit' : 10}, 'POST', function( jsonNews ) {
+											                
+										console.info('---- JSON News Results ----');
+										console.info(jsonNews);
+										
+										allNewsJson = jsonTwitter.concat(jsonNews);
+								                
+								        // Sort the news by date...	        
+								        allNewsJson = sortResults('publisheddate', false);
+							
+										featuredCount = allNewsJson.length;
+														
+							            //loop through deals
+							            $.each(allNewsJson,function(i,dat){				                    
+
+											siteSource = '';
+											newsSource = '';
+
+							                // For regular news / blog show more information...
+							                if (dat.source == 0) 
+							                {
+							                	newsSiteAddress = getLocation(dat.link);
+							                	siteSource = newsSiteAddress.hostname;
+							                	newsSource = 'web';
+							                }
+							                else
+							                {
+							                	newsSource = 'twitter';
+							                }
+							                
+							            	var content = '<div class="item">' +
+							                   		  	  '<div class="inneritem"><a class="linkitem ' + $.encoder.encodeForHTML(newsSource) + '" data-newsurl="' + $.encoder.encodeForHTML(dat.link) + '" data-author="' + $.encoder.encodeForHTML(dat.author) + '" data-tweetid="' + $.encoder.encodeForHTML(dat.link) + '">' + 
+							                   		      '<div class="topnewsname">' + $.encoder.encodeForHTML(dat.accountname) + ' <span class="daysago"> - ' + $.timeago($.encoder.encodeForHTML(dat.publisheddate)) + '</span></div>' +
+							                   		      '<p>' + htmlDecode($.encoder.encodeForHTML(dat.title)) + '</p>' +
+							                			  '<p>' + $.encoder.encodeForHTML(siteSource) + '</p>' +
+							                			  '</a></div></div>';
+							                        
+							                //owl.addItem(owlItem [i]);
+							                owl.data('owlCarousel').addItem(content);
+							                
+											// Check to see if done
+											if (!--featuredCount) {
+												bindFeatLinks();
+											}							                
+							                			                        	
+	                				    });	         	                				           				      
+	                				      
+                				      	// Check to make sure we actually have results to work with...
+                				      	if (allNewsJson.length > 0) {
+
+										      	$('h2.topnewsheading').show();
+										      	$('#owl-demo').fadeIn();		                        	
+										}
+										else {
+											//console.info('Found ' + json.length + ' news items');
+										}
+			                        }); 
+                        
+			                                         
+				                });
+            	}
+            
+
+             	
+             	// TODO - pass in filter logic here...
+             	
+			    function getNewsAccounts(filterValue, labelValue) {
+		        // TODO - filter info here info var to pass into remoting call...
+		        
+		        	$('#viewTitle').html(labelValue);
+			        $('#mainloader').show();
+			        
+			        // Clear news ranking list & clear Top News
+			        $('#list').hide();
+			        $('#filterbar').hide();
+			        $('#list').html('');
+			        $('#owl-demo').html('');
+			        $('#owl-demo').hide();
+			        $('h2.topnewsheading').hide();
+			
+			        Visualforce.remoting.Manager.invokeAction(
+			            '{!$RemoteAction.s1m_metro_news.getAccountFilter}', filterValue, 
+			            function(result, event){
+			                if (event.status) {
+			                
+			                	$('#matchCount').html(result.length);
+				                			                				                
+				                var newsAccountIds = new Array();
+				                
+				                // Get Array of Account IDs to send to news service
+				                $.each(result, function(resultIndex, resultVal ) {
+									console.log(resultVal);
+									newsAccountIds.push(resultVal); 
+				                });
+				                
+				                console.log(newsAccountIds);
+				                
+				                // Grab from our Heroku service
+				                var url = '{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/api/getnewsevents';				                
+				                				                
+									//$.post(url, {'accounts': newsAccountIds}, function( json ) {
+									
+									getIgnition(url, {'accounts': newsAccountIds}, 'POST', function( json ) {								 
+													           
+										newsCounter = json.length;
+											                		
+					                	// Check if News comes back from Heroku service	   
+					                	if (newsCounter < 1)
+					                	{
+					                		listRow = '<li class="newslink">'+ 
+										              '	<div>  ' +
+										              '		No matches found for that filter or search.' +
+										              '	</div> ' +
+				                                      '</li>';
+							                                    
+							                //$('#mainloader').hide();  						                                      
+							                $('#list').append(listRow);
+							                //$('#list').fadeIn();
+					                	}
+					                			                
+					                    // Loop through news results and build the table
+					                    $.each(json,function(i,dat){
+					                    
+					                    	listRow = '<li class="newslink" data-accountid="' + $.encoder.encodeForHTML(dat.accountid) + '">'+ 
+						                        			  '<h2 style="overflow: hidden; width:60%;float:left;">' + $.encoder.encodeForHTML(dat.accountname) + '</h2>' +
+															  '<div class="ui-grid-a" style="width:40%;float:right;width: 80px;">' +
+												              '    <div class="ui-block-a" style="width:40px;">' +
+												              '      <i class="fa fa-twitter tweet" style="font-size: 2em;"' + 
+												              ' data-tweetvolume="' +
+												              Math.ceil($.encoder.encodeForHTML(dat.percent_twitter_share)) + '"></i>' +
+												          	  '	  </div>' + 
+												              '    <div class="ui-block-b" style="width:40px;">' +
+												              '    	<div class="sentiment" data-sentiment="' + 
+												              Math.round($.encoder.encodeForHTML(dat.avg_setiment) * 10) / 10 + '">';
+												              
+												              
+												              if ($.encoder.encodeForHTML(dat.avg_setiment) >= 0)
+												              {
+												              	listRow += '<i class="fa fa-plus" style="color:#fff;">';
+												              }
+												              else {
+												              	listRow += '<i class="fa fa-minus" style="color:#fff;">';
+												              }
+												               
+												              listRow += '</i></div>' +
+												              '    </div>' +
+												              '</div>' +
+						                                      '</li>';
+						                                      
+						                                      
+						                    $('#list').append(listRow);
+		
+											// Check to see if done
+											if (!--newsCounter) {
+												$('#list').fadeIn();
+												$('#filterbar').fadeIn();
+												getTopNews(newsAccountIds);
+											}
+
+					                     });
+					                     
+					                     // Color code for Sentiment
+					                     
+					                     
+		
+					                     
+					                     $("#list").listview('refresh');
+					                     $('#mainloader').hide();
+					                     
+					                     var tweetNodes = $('.tweet');
+					                     
+					                     $.each(tweetNodes, function (index, item) {
+					                     	tweetvolume = $(item).data('tweetvolume');
+					                     	color = $.xcolor.gradientlevel('#EFEFEF', '#4099FF', tweetvolume, 100).getHex();
+					                     	console.log(color);
+					                     	$(item).css({'color' : color});
+					                     });
+					                     
+					                     var sentimentNodes = $('.sentiment');
+					                     			                     
+					                     $.each(sentimentNodes, function (index, item) {
+										 	sentiment = $(item).data('sentiment');
+										 	var codeClass = '';
+										 	if (sentiment >= .5) {
+											 	if (sentiment >= 2.5)
+											 	{
+											 		codeClass = 'indicator-pos1';
+											 	}
+												else
+												{
+													codeClass = 'indicator-pos0';
+												}
+											}
+										 	else if (sentiment <= -0.5) {
+											 	if (sentiment <= -2.5)
+											 	{
+											 		codeClass = 'indicator-neg1';
+											 	}
+												else
+												{
+													codeClass = 'indicator-neg0';
+												}
+											}	
+											else {
+												codeClass = 'indicator-neutral';
+											}								
+		
+											//console.log(item);
+											console.log('Adding - ' + codeClass);
+											$(item).addClass(codeClass);
+										 	
+										 });
+										 
+										 // Bind touch to line items
+										 $('li.newslink').on("tap", function() {
+											var newsUrl = '/apex/s1m_metro_news?id=' + $(this).data("accountid");
+											console.log('Going to - ' + newsUrl);
+											sforce.one.navigateToURL(newsUrl);	
+										 });
+										 
+					                     $('.optionstop').fadeIn();
+					                     $('#list').fadeIn();
+
+				                
+				                });
+				                
+			                } else if (event.type === 'exception') {
+			                    console.log(event.message + ' - ' + event.where);
+			                } else {
+			                    console.log(event.message);
+			                }
+			            }, 
+			            {escape: true}
+			        );
+			    }			                
+			
+		  $(function() {
+	        // Populate the news events
+	        // TODO - take params...
+	        getNewsAccounts('', 'Recently Viewed');		
+					                			                
+          });          
+          
+          $('#cancel').click(function() {
+	         $.mobile.changePage( "#mainpage", { transition: "fade", changeHash: false });
+	      });
+          
+        </script>
+
+
+	<!-- START scrolling news banner -->
+
+    <script src="{!URLFOR($Resource.stylepack, 'stylepack/js/owl.carousel.min.js')}"></script>
+	
+	
+    <style> 
+    
+/* Fix for whitespace appearing at bottom of page... likely due to dynamic sizing of the slider content */
+.ui-content {
+	margin-bottom: -20px;
+}    
+    
+    
+    span.daysago {
+    	font-size: 14px;
+    	color: #ccc;
+    }
+    
+    
+    h2.topnewsheading {
+color: #fff;
+/* float: left; */
+margin-top: 26px;
+z-index: 2;
+position: absolute;
+margin-left: 16px;
+font-size: 18px;
+    }
+    
+    #owl-demo {
+    	margin-top: 14px;
+    	display: none;
+    	
+    	/* JMB - NEW */
+    	
+    	border: 1px solid #dfe0e1;
+		border-radius: 5px;
+		background: #fff;
+		
+		/* JMB - END NEW */
+		
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);		
+		
+    }
+    
+    #owl-demo .item, .inneritem {
+/* background: #fff; */
+padding: 0px 8px;
+/* margin: 5px; */
+color: #fff;
+-webkit-border-radius: 3px;
+-moz-border-radius: 3px;
+border-radius: 3px;
+text-align: left;
+width: 95%; /* was 90 */
+
+float: left;
+padding-top: 14px;
+
+    }
+    
+html .ui-page-theme-a .inneritem a {
+	color: #fff;
+	font-weight: normal;
+}    
+    
+    #owl-demo .item p {
+font-size: 14px;
+padding-top: 0px;
+margin-top: 4px;
+    }
+    
+    .owl-theme .owl-controls, div.owl-buttons {
+    	display: none ! important;
+    }
+    
+    div.topnewsname {
+    	padding-top: 14px;
+    }
+    
+    
+    </style>
+    
+    <!-- END scrolling news banner -->
+    
+
+
+<style>
+/* 
+ *  Core Owl Carousel CSS File
+ *  v1.3.3
+ */
+
+/* clearfix */
+.owl-carousel .owl-wrapper:after {
+  content: ".";
+  display: block;
+  clear: both;
+  visibility: hidden;
+  line-height: 0;
+  height: 0;
+}
+/* display none until init */
+.owl-carousel{
+  display: none;
+  position: relative;
+  /* width: 100%; */
+  -ms-touch-action: pan-y;
+}
+.owl-carousel .owl-wrapper{
+  display: none;
+  position: relative;
+  -webkit-transform: translate3d(0px, 0px, 0px);
+}
+.owl-carousel .owl-wrapper-outer{
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  border-radius: 5px;
+}
+.owl-carousel .owl-wrapper-outer.autoHeight{
+  -webkit-transition: height 500ms ease-in-out;
+  -moz-transition: height 500ms ease-in-out;
+  -ms-transition: height 500ms ease-in-out;
+  -o-transition: height 500ms ease-in-out;
+  transition: height 500ms ease-in-out;
+}
+  
+.owl-carousel .owl-item{
+  float: left;
+}
+.owl-controls .owl-page,
+.owl-controls .owl-buttons div{
+  cursor: pointer;
+}
+.owl-controls {
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+
+/* fix */
+.owl-carousel  .owl-wrapper,
+.owl-carousel  .owl-item{
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility:    hidden;
+  -ms-backface-visibility:     hidden;
+  -webkit-transform: translate3d(0,0,0);
+  -moz-transform: translate3d(0,0,0);
+  -ms-transform: translate3d(0,0,0);
+}
+
+/*
+*   Owl Carousel Owl Demo Theme 
+* v1.3.3
+*/
+
+.owl-theme .owl-controls{
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* Styling Next and Prev buttons */
+
+.owl-theme .owl-controls .owl-buttons div{
+  color: #FFF;
+  display: inline-block;
+  zoom: 1;
+  *display: inline;/*IE7 life-saver */
+  margin: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  -webkit-border-radius: 30px;
+  -moz-border-radius: 30px;
+  border-radius: 30px;
+  background: #869791;
+  filter: Alpha(Opacity=50);/*IE7 fix*/
+  opacity: 0.5;
+}
+/* Clickable class fix problem with hover on touch devices */
+/* Use it for non-touch hover action */
+.owl-theme .owl-controls.clickable .owl-buttons div:hover{
+  filter: Alpha(Opacity=100);/*IE7 fix*/
+  opacity: 1;
+  text-decoration: none;
+}
+
+/* Styling Pagination*/
+
+.owl-theme .owl-controls .owl-page{
+  display: inline-block;
+  zoom: 1;
+  *display: inline;/*IE7 life-saver */
+}
+.owl-theme .owl-controls .owl-page span{
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 5px 7px;
+  filter: Alpha(Opacity=50);/*IE7 fix*/
+  opacity: 0.5;
+  -webkit-border-radius: 20px;
+  -moz-border-radius: 20px;
+  border-radius: 20px;
+  background: #869791;
+}
+
+.owl-theme .owl-controls .owl-page.active span,
+.owl-theme .owl-controls.clickable .owl-page:hover span{
+  filter: Alpha(Opacity=100);/*IE7 fix*/
+  opacity: 1;
+}
+
+/* If PaginationNumbers is true */
+
+.owl-theme .owl-controls .owl-page span.owl-numbers{
+  height: auto;
+  width: auto;
+  color: #FFF;
+  padding: 2px 10px;
+  font-size: 12px;
+  -webkit-border-radius: 30px;
+  -moz-border-radius: 30px;
+  border-radius: 30px;
+}
+
+/* preloading images */
+.owl-item.loading{
+  min-height: 150px;
+/*  background: url(AjaxLoader.gif) no-repeat center center */
+}
+</style>
+
+
+
+<style>
+
+div.owl-pagination {
+	display: none;
+}
+
+
+span.filter {
+font-size: 24px;
+line-height: 1.6em;
+float: right;
+margin-right: 14px;
+margin-top: -2px;
+color: #333;
+}		
+
+		
+		div.libfolder div {
+			float:left;
+			width: 100%;
+			border-top:1px solid #F0F1F2;
+			padding:12px;
+			margin-left: -12px;
+			color: #2a94d6;
+		}
+
+
+	.headicon-wrap {
+		width: 60px;height: 60px; margin: auto;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+border-radius: 5px;
+background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+background: linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+padding-bottom: 14px;
+	}
+
+
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+		
+		div.sentiment {
+			width: 40px;
+			height: 40px;
+			text-align: center;
+			display: table-cell;
+    		vertical-align: middle;
+			border-radius: 5px;
+			/* float: right; */
+		}
+
+		.indicator-neg1 {
+			background: #E15D76 ! important;
+		}
+
+		.indicator-neg0 {
+			background: #E1BE5C ! important;
+		}
+
+		.indicator-neutral {
+			background: #E3E1E2 ! important;
+		}
+
+		.indicator-pos0 {
+			background: #B8EB9F ! important;
+		}
+
+		.indicator-pos1 {
+			background: #4BC076 ! important;
+		}		
+
+	div.optionstop {
+		margin-bottom: -10px;
+		margin-top:4px;
+		display: none;
+	}
+
+	a.filtericon span.icon-utility-filter {
+		color: #333;
+	}
+
+	div.ui-header {
+		padding-top: 14px;
+	}
+	
+	
+	div.headicon span {
+		line-height: 1.6em;
+	}
+	
+		
+	div.headicon i.fa {
+		margin-top:12px;
+		font-size: 1em;
+	}
+	
+	div.sideicon
+	{
+		border-radius: 5px;
+        width: 40px;height: 40px; margin-left: 14px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-size: 40px 40px;
+        background-color:#53b6d7;font-size:1.4em;text-align:center;	
+	}
+	
+	div.sideicon span {
+		line-height: 1.9em;
+	}
+
+
+
+	div.headicon-news
+	{
+		border-radius: 5px;
+        width: 60px;height: 60px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+        background-image: url('{!URLFOR($Resource.stylepack, 'stylepack/img/headlines-120.png')}');
+	        background-size: 60px 60px;
+	        background-color:#7698F0;font-size:2.4em;text-align:center;
+	}
+	
+
+
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		  
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icon-utility.ttf')}");
+		}
+	
+	
+	div.toolbar i.fa {
+		font-size: 1.8em;
+		padding: 10px;
+	}
+	
+	
+	
+html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-b.toolbar.center {
+color: #fff;
+text-align: center;
+background: #293f54;
+border-top: 1px solid #203345;
+}
+
+html .ui-bar-a, html .ui-page-theme-a .ui-bar-inherit, html .ui-bar-a .ui-bar-inherit, html .ui-body-a .ui-bar-inherit, html body .ui-group-theme-a .ui-bar-inherit {
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);
+}  
+
+	
+	
+	 /* Add more space for header */
+ .ui-header .ui-title, .ui-footer .ui-title
+ {
+ 	margin: 0 10%;
+ }
+	
+</style>
+
+
+
+</apex:page>

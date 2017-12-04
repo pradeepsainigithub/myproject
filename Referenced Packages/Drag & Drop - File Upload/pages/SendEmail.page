@@ -1,0 +1,4 @@
+<apex:page title="Task: Send an Email" id="sendEmail">
+    <c:SendEmailComponent >
+    </c:SendEmailComponent>
+</apex:page>

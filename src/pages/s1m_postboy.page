@@ -1,0 +1,896 @@
+<apex:page standardController="Contact" extensions="s1m_postboy"
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="false" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false">
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/icons.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.mobile-1.4.0-rc.1.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.touchSwipe.min.js')}"></script>
+
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/Class.create.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery-encoder-0.1.0.js')}"></script>
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+	<apex:includeScript value="/canvas/sdk/js/publisher.js" />
+
+  <div data-role="page" id="mainpage">
+
+
+    <div data-role="content" class="container">
+	 
+	<div class="wrapper radiooptions">
+
+          		<div class="ui-radio2" style="width:33%"><label for="radio-choice-1-a" class="ui-btn ui-corner-all ui-btn-c ui-btn-icon-left ui-first-child ui-radio-on">Mail</label>
+          			<input type="radio" name="sendmethod" data-theme="c" id="radio-choice-1-a" value="email" checked="checked" />
+          		</div>
+          		<div class="ui-radio2" style="width:47%"><label for="radio-choice-1-b" class="ui-btn ui-corner-all ui-btn-c ui-btn-icon-left ui-radio-off" id="radio-choice-1-b-label">Community</label>
+          			<input type="radio" name="sendmethod" data-theme="c" id="radio-choice-1-b" value="community" />
+          		</div>
+          		<div class="ui-radio2" style="width:20%">
+					<a href="#filter"><span class="icon-utility-filter filter"></span></a>
+          		</div>    
+          		       
+    </div>
+    
+    <div class="wrapper doccounts">
+    	<div style="width: 40%;float: left;margin-left: 14px;">
+    		<h2><span id="docCount"></span></h2>
+    	</div>
+    	<div style="width: 40%;float: right;text-align: right;margin-right: 14px;">
+    		<h2><a href="#selectedmodal"><span id="selectCount">None</span> Selected</a></h2>
+    	</div>
+    </div>
+
+
+    
+    <div class="loader" id="mainloader"></div>
+    	
+	<div class="wrapper"> 
+		<div id="docList">
+		</div> 
+	</div>
+
+
+		<div id="errormsg">
+			<h2>Apologies - Postbox not Sent</h2>
+			<div id="responseErrors"></div>
+			<p>
+				You may have tried to<br/>
+				&middot; email files exceeding 10MB in total<br/> 
+				&middot; share in community without available licenses<br/>
+				&middot; missing permissions to share the document<br/>
+			</p>
+			<p>
+				Please check and try again
+			</p>
+			
+		</div>
+
+	<div id="send" style="display:none">Send Test</div>
+
+	<div id="result"></div>
+	
+ 
+		
+
+		
+		
+
+    </div>
+  </div>
+  
+  
+  
+  <div data-role="page" id="filter">
+  	
+  	<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow">
+  		<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+  			<h2>Search Documents</h2>
+  		</li>
+		<li>
+	    		<div style="width:70%;float:left;"><input type="text" id="searchTerm" placeholder="search term"/></div>
+	    		<div style="width:24%;float:right;">
+		    		<div data-theme="f" id="searchButton" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">Go</div>
+		    	</div>		
+		</li>
+  	</ul> 
+
+  	<ul data-role="listview" data-inset="true" class="ui-listview ui-corner-all ui-shadow" style="margin-top:14px;">
+  		<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+	  		<h2>Library Folders</h2>
+			<div id="options"></div>
+		</li>
+  	</ul>  	    	
+			
+	<div class="wrapper">
+		<div data-theme="f" id="cancel" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">cancel</div>
+	</div>
+	
+  </div>
+
+
+  <div data-role="page" id="selectedmodal" style="margin-top:14px;">
+  		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" style="padding:0px">
+  			<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+				<h2>Item(s) Selected</h2>
+			</li>
+			<li class="selecteditemslist">
+	    		<div id="selecteditems"></div>
+			</li>
+		</ul>
+	
+		<div class="wrapper">
+			<div data-theme="f" id="cancelSelect" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">back</div>
+		</div>
+  </div>
+
+
+
+
+
+<script>
+
+	// For JS encoder
+	var immune;  
+
+	// Set defaults for "paging" - it will all happen client side
+	var pageSize = 10;
+	var visibleSize = pageSize;
+	var totalMatches = 0;
+    
+    function processCheckBoxes() {
+    	
+		var selectedIds = [];
+		
+		// Get selected IDs
+		$('div.selecteditem').each(function () {
+	       selectedIds.push($(this).data('docid'));
+	  	});
+	  	
+	  	// console.info(selectedIds);
+	  	
+	  	// Loop through selected and check where needed	  	
+    	$(':checkbox').each(function () {
+    		
+    		activeId = $(this).val();
+    		// console.info('Trying - ' + activeId);
+    		if ($.inArray(activeId,selectedIds) > -1)
+    		{
+                // console.info('hit on ' + $(this).val());
+	    		$(this).prop('checked', true);
+    		}
+    		else
+    		{
+    			$(this).prop('checked', false);
+    		}	
+    	});
+    	
+    }
+    
+    function updateMatchCount()
+    {
+    	visibleItemCount = $('#docList div.docitem.active').length;
+    	$('#docCount').html(visibleItemCount + ' / ' + totalMatches + ' shown');
+    	if (visibleItemCount == totalMatches)
+    	{
+    		// Hide the "more" button
+    		$('#morePages').text('All Records Displayed');
+    	}
+    }
+    
+    
+    function showMorePage()
+    {
+    	visibleSize += pageSize;
+    	
+    	// Unhide any pages that should be visible
+    	$('div.docitem').each(function( index ) {
+	    	if (index < visibleSize)
+	    	{
+	    		$(this).removeClass('inactive').addClass('active');
+	    		$(this).fadeIn();
+	    		
+	    		// Update the match display at top
+	    		updateMatchCount();
+	    	}
+	  	});
+    }
+    
+
+	function loadDocuments(libraryId, searchTerm, offsetCounter)
+	{
+		// Reset list and show loader
+		$('#docList').html('');
+		$('#mainloader').show();
+		
+		Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.s1m_postboy.getDocuments}', libraryId, searchTerm, 
+		offsetCounter, function(matches, event) {
+		
+			// console.info(matches);
+					
+			var docList = '';
+			$('#errormsg').hide();
+					
+			if (matches.length < 1)
+			{
+				docList +=  '<div class="ui-grid-b docitem">' +
+		            		'<div style="" class="docdetails"><div>No matches found - please try another search or filter.<br/><br/>' +
+		            		'</div></div>' +
+		    				'</div>';
+			}
+			else {
+				totalMatches = matches.length;
+			}
+			
+			// Reset page size counters
+			itemForPageCount = 0;
+			visibleSize = pageSize;
+			
+			// Do all other events for population of Events view...
+			$.each(matches, function() {
+							
+						itemForPageCount += 1;
+					
+						var tags = (this.TagCsv) ? $.encoder.encodeForHTML(this.TagCsv).replace(",", " ").toLowerCase() : ''; 
+						var docExtension = (this.PathOnClient) ? $.encoder.encodeForHTML(this.PathOnClient).split('.').pop() : '';
+					
+						docList +=  '<div class="ui-grid-b docitem ';
+						
+						if (itemForPageCount > pageSize)
+						{
+							docList +=  'inactive" style="display:none;"';
+						}
+						else
+						{
+							docList +=  'active"';
+						}						
+						
+			        	docList +=  '><div class="statusstripe ' + tags + '"><div>' +
+			        				'	<div class="filecheckbox">' +
+			        				'			<input type="checkbox" name="checkbox-' + $.encoder.encodeForHTML(this.Id) + 
+			        				'" value="' + $.encoder.encodeForHTML(this.ContentDocumentId) + '" data-title="' + $.encoder.encodeForHTML(this.Title) + 
+			        				'" id="checkbox-' + $.encoder.encodeForHTML(this.Id) + '"></input>' +		        				
+			        				'			<label for="checkbox-' + $.encoder.encodeForHTML(this.Id) + '"><span></span></label>' +
+			        				'	</div>' +
+			        				'		<div class="filetype">' +
+			        							$.encoder.encodeForHTML(docExtension) +
+			        				'		</div>' +
+			        				'</div></div>' +
+			            			'<div style="" class="docdetails"><div>' +
+			            			'	<h2 class="docname">' + $.encoder.encodeForHTML(this.Title) + ' <span id="size-' + $.encoder.encodeForHTML(this.Id) + '"></span></h2>';
+			            			
+						            if (this.Description)
+						            {
+						            	docList += '<p class="docdescription">' + $.encoder.encodeForHTML(this.Description) + '</p>';
+						            }
+						            else {
+						            	docList += '<p class="docdescription"></p>';
+						            }
+			            					           				
+			             docList += '</div></div>' +
+			    					'</div>';
+			    					
+			    		 if (itemForPageCount == totalMatches)
+			    		 {
+			    		 
+			    		 
+			    		 	// console.info('UPDATING COUNTS...');
+							docList += '<div id="morePages"><div data-theme="c" onclick="showMorePage()" class="ui-btn ui-btn-c ui-shadow ui-corner-all half">' + 
+							'<i class="fa fa-refresh"></i> Show More</div></div>';
+										
+							$('#mainloader').hide();
+							$('#docList').html(docList);		    		 	
+			    		 	
+							updateMatchCount();
+							
+							// Track the checkboxes and ensure selections are persisted
+							processCheckBoxes();
+							bindSelection();		    		 
+			    		 }
+			    		 
+				});
+			
+		});
+	}
+	
+	
+	Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.s1m_postboy.getWorkspaces}', function(matches, event){
+
+		// Reset list with header
+		$('#options').html('<li data-role="list-divider"role="heading" class="ui-li-divider ui-first-child">Library Folder</li>');
+		// console.info(matches);		
+		var options = '';
+		
+		// Setup default options...
+		options += '<div class="libfolder"><div onclick="loadDocuments(\'all\', \'\', 0);$.mobile.navigate(\'#mainpage\');">All Documents</div></div>'; //loadDocuments('all', '');
+		options += '<div class="libfolder"><div onclick="loadDocuments(\'recent\', \'\', 0);$.mobile.navigate(\'#mainpage\');">Recent Documents</div></div>'; //loadDocuments('all', '');
+			
+		$.each(matches, function() {		
+				options +=  '<div class="libfolder"><div onclick="loadDocuments(\'' + $.encoder.encodeForJavascript(this.Id) + '\', \'\', 0);$.mobile.navigate(\'#mainpage\');">' + $.encoder.encodeForHTML(this.Name) + '</div></div>';
+		});
+
+		$('#options').html(options);	
+	});	
+	
+
+	function updateSelection(changetype, name, id)
+	{
+		if (changetype == 'add')
+		{
+			docAdd =  '<div class="ui-grid-b docitem selecteditem" data-docid="' + id + '">' +
+        				'<div class="statusstripe selectedlist"><div>' +
+        				'<div onclick="updateSelection(\'remove\', \'' + name + '\', \'' + id + '\')"><i class="fa fa-minus-circle"></i></div> ' +
+        				'</div></div>' +
+            			'<div style="" class="docdetails"><div>' +
+            			'	<h2 class="docname">' + name + '</h2>' +
+            			'<p class="docdescription"></p>' +
+             			'</div></div>' +
+    					'</div>';
+		    					
+			$('#selecteditems').append(docAdd);
+		}
+		else
+		{
+			$('.selecteditem').filter('[data-docid="' + id + '"]').remove();
+			
+		}
+		
+		$('#selectCount').html($('#selecteditems .selecteditem').length);
+		
+		// Activate the Publisher button if item(s) are in selection
+		if ($('#selecteditems .selecteditem').length > 0){
+			Sfdc.canvas.publisher.publish({name:"publisher.setValidForSubmit", payload:"true"});
+		}
+		else {
+			Sfdc.canvas.publisher.publish({name:"publisher.setValidForSubmit", payload:"false"});
+		}
+		
+		processCheckBoxes();
+	}
+
+	function bindSelection()
+	{
+		// If checkbox has been checked...
+		$('input[type="checkbox"]').change(function(){
+			// console.info(this);
+		    this.checked ? updateSelection('add', $(this).attr('data-title'), $(this).attr('value')) : updateSelection('remove', $(this).attr('data-title'), $(this).attr('value'));
+		});
+	}
+
+	function sendDocs() {
+		var docIds = [];
+
+		$('div.selecteditem').each(function () {
+	       //docIds.push("'" + $(this).data('docid') + "'");
+	       docIds.push($(this).data('docid'));
+	  	});
+	  		
+	    Visualforce.remoting.Manager.invokeAction(
+	        '{!$RemoteAction.s1m_postboy.sendEmailDocs}', 
+	        '{!Contact.Email}', docIds, '{!Contact.Id}', $('input[name=sendmethod]:checked').val(),
+	        function(result, event){
+	            if (event.status) {
+	            	Sfdc.canvas.publisher.publish({ name: "publisher.close", payload:{ refresh:"true"}});
+//	                Sfdc.canvas.publisher.publish({ name: "publisher.close", payload:{ refresh:"false" }});
+	            } else if (event.type === 'exception') {
+	                $('#responseErrors').html(event.message);
+	                $('#errormsg').show();
+	                $('#mainloader').hide();
+	                
+	            } else {
+	                $('#responseErrors').html(event.message);
+	                $('#errormsg').show();
+	                $('#mainloader').hide();
+	            }
+	        }, 
+	        {escape: true}
+	    );
+	}
+
+	
+
+	// Navigation for filters
+    $('#searchButton').on("tap", function() { 
+    	// Refresh the list based on filter settings
+    	loadDocuments('all', $('#searchTerm').val(), 0);
+		
+		// Reset search term
+		$('#searchTerm').val('');
+    	$.mobile.changePage( "#mainpage", { transition: "slideup", changeHash: false });
+    });
+
+    $('#cancel').click(function() {
+    	$.mobile.changePage( "#mainpage", { transition: "fade", changeHash: false });
+    });
+
+    $('#cancelSelect').on("tap", function() {
+    	$.mobile.changePage( "#mainpage", { transition: "fade", changeHash: false });
+    });    
+	// End navigation for filters	
+    
+
+	// First load of documents, load all
+	loadDocuments('recent', '', 0);
+
+
+
+	$(function() {
+
+		// Degrade UI based on perms - class respects as well, but do not want to confuse end user
+	    
+	    
+	    Visualforce.remoting.Manager.invokeAction(
+	        '{!$RemoteAction.s1m_postboy.communitySendPermission}',
+	        function(permission, event){
+	            if (event.status) {
+					// Ok
+					console.info('-------- permission check');
+					console.info(permission);
+					
+					if (!permission)
+					{
+						$('#radio-choice-1-b').hide();
+		    			$('#radio-choice-1-b-label').hide();
+					}
+					else {
+						$('#radio-choice-1-b').show();
+		    			$('#radio-choice-1-b-label').show();
+					}
+	            } else if (event.type === 'exception') {
+	                $('#responseErrors').html(event.message);
+	                $('#errormsg').show();
+	                $('#mainloader').hide();	                
+	            } else {
+	                $('#responseErrors').html(event.message);
+	                $('#errormsg').show();
+	                $('#mainloader').hide();
+	            }
+	        },
+	        {escape: true}
+	    );	    
+	    
+	    // communitySendPermission
+	});
+
+
+</script>
+
+
+
+<script>
+    
+	// Document ready
+	$(function() {
+	    // Disable submit button
+    	//Sfdc.canvas.publisher.publish({name: "publisher.setValidForSubmit", payload:"false"});
+
+		Sfdc.canvas.publisher.subscribe({name: "publisher.post", onData:function(e) {
+	    	$('#docList').hide();
+	    	$('#mainloader').show();
+	    	sendDocs();
+		}});		
+	});    
+    
+
+</script>
+	
+	
+	
+	
+	<!--  Footer includes --> 
+	
+	<style>
+	
+	#radio-choice-1-b-label, #radio-choice-1-b {
+		display: none;
+	}
+	
+	#mainpage, #filter, #selectedmodal {
+	position: fixed;
+height: 200px;
+overflow: scroll;
+-webkit-overflow-scrolling: touch;
+
+	}
+
+#filter, #selectedmodal {
+	padding: 14px 0px;
+}
+	
+	
+		/* Hide pages beyond the paging size */
+		div.pageHide {
+			display: none;
+		}
+		
+		#docList {
+			width: 100%;
+			float: left;
+		}
+		
+		#morePages {
+			text-align: center;
+		}
+	
+		/* Page specific CSS */
+		#errormsg {
+			display: none;
+			padding: 0px 14px;
+			
+		}
+		
+		/* .docitem:nth-child(odd)		{ background-color:#FAFAFA; }
+		.docitem:nth-child(even)		{ background-color:#F0F1F2; } */
+		
+		
+		div h2.docname {
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		
+		/* Document Tag Type */
+		
+		/* Default color */
+		div.statusstripe {
+			background: #CCCCCC;
+		}
+		
+		div.statusstripe.datasheet
+		{
+			background: #CF5C60;
+		}
+		
+		div.statusstripe.presentation {
+			background: #e98b32;
+		}
+		
+		div.statusstripe.contract 
+		{
+			background: #4BC076;
+		}
+		
+		div.statusstripe.agreement {
+			background: #8B9AE3;
+		}
+		
+		div.statusstripe.warranty {
+			background: #59BCAB;
+		}
+		/* End Document Tag Type */
+		
+		
+		#options {
+			margin-top: 14px;
+		}
+		
+		div.libfolder div {
+			float:left;
+			width: 100%;
+			border-top:1px solid #F0F1F2;
+			padding:12px;
+			margin-left: -12px;
+			color: #2a94d6;
+		}
+		
+div.statusstripe {
+color: #fff;
+width: 19%;
+padding: 20px 0px 32px 0px;
+text-align: center;
+margin-top: -14px;
+float: right;
+margin-bottom: -14px;
+}		
+
+div.statusstripe.selectedlist {
+	background: none;
+}
+
+div.statusstripe.selectedlist i.fa {
+color: #666;
+font-size: 2em;
+margin-top: -5px;
+}
+
+li.selecteditemslist {
+	padding-left: 0px;
+	padding-right: 0px;
+}
+		
+		div.filetype {
+			font-size: 14px;
+			text-transform: lowercase;
+			width: 100%;
+		}
+		
+		div.filecheckbox {
+			width: 100%;
+			float: left;
+			margin-top: -10px;
+			text-align: center;
+		}
+		
+		
+		.wrapper.doccounts h2
+		{
+			font-size: 15px;
+			color: #fff;
+		}
+		
+span.filter {
+font-size: 24px;
+line-height: 1.6em;
+float: right;
+margin-right: 14px;
+margin-top: 8px;
+color: #fff;
+}		
+
+.wrapper.radiooptions {
+margin-bottom: 0px;
+background: #2A94D6;
+margin-top: 0px;
+color: #fff;
+
+-webkit-border-top-left-radius: 5px;
+-webkit-border-top-right-radius: 5px;
+-moz-border-radius-topleft: 5px;
+-moz-border-radius-topright: 5px;
+border-top-left-radius: 5px;
+border-top-right-radius: 5px;
+}		
+		.wrapper.doccounts
+		{
+padding: 14px 0px;
+margin-top: -4px;
+margin-bottom: 10px;
+background: #344A5F;
+-webkit-border-bottom-right-radius: 5px;
+-webkit-border-bottom-left-radius: 5px;
+-moz-border-radius-bottomright: 5px;
+-moz-border-radius-bottomleft: 5px;
+border-bottom-right-radius: 5px;
+border-bottom-left-radius: 5px;
+width: 100%;
+/* float: left; */
+/* border-top: 1px solid #203345; */
+		}
+		
+		.wrapper.filteroptions
+		{
+		margin-bottom: 0px;
+/* background: #2A93D5; */
+margin-top: 0px;
+color: #fff;
+background: -webkit-linear-gradient(#2a93d5,#107abb);
+background: linear-gradient(#2a93d5,#107abb);
+
+-webkit-border-top-left-radius: 5px;
+-webkit-border-top-right-radius: 5px;
+-moz-border-radius-topleft: 5px;
+-moz-border-radius-topright: 5px;
+border-radius: 5px;
+/* border-top-right-radius: 5px; */
+margin-bottom: 14px;
+		}
+		
+		.headtext
+		{
+			padding: 14px;
+		}
+		
+		
+		
+		.ui-radio2 
+		{ 
+			width: 50%;
+			float: left;
+		}
+		
+		body .ui-radio2 .ui-btn.ui-btn-c
+		{
+			/* background: #2A93D5; */
+			border-color: transparent;
+			color: #fff;
+			
+background: #2A94D6;			
+			
+			
+		}
+		
+		body .ui-radio2 .ui-btn.ui-btn-c, body .ui-radio2 .ui-btn.ui-btn-c:active, body .ui-radio2 .ui-btn.ui-btn-c:hover
+		{
+
+background: #2A94D6;
+			color: #fff;
+			border: 1px transparent;
+		}		
+		
+		
+		div.checkboxes {
+			/* width:15%;
+			float:right; */
+			display: none;
+		}
+		
+		div.docdescriptionwrap {
+			/* display: -webkit-box;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+			height: 20px; */
+		}
+		
+		div.docdetails {
+			float:left;
+			width:80%;
+			/* margin-left: 1%; */
+		}
+		
+		h2.docname {
+			margin-top: 0px;
+			font-size: 15px;
+		}
+	
+		p.docdescription {
+			margin-top: 0px;
+			/* float: left; */
+			font-size: 14px;
+			
+		  overflow : hidden;
+		  text-overflow: ellipsis;
+		  display: -webkit-box;
+		  -webkit-line-clamp: 2;
+		  -webkit-box-orient: vertical;			
+		}
+		
+		.ui-checkbox, .ui-radio
+		{
+/*			margin: 0px; */
+		}
+	
+		.container {
+			margin-top: 14px;
+			padding: 0px 0px 14px 0px;
+		}
+	
+.docitem {
+margin-bottom: 10px;
+padding: 14px 0px 0px 14px;
+border-radius: 5px;
+background: #fff;
+/* float: left; */
+/* width: 100%; */
+border: 1px solid #dfe0e1;
+}	
+		label.checkfix {
+			height: 14px;
+			background: #f0f1f2;
+			border: 0px;
+		}
+	
+		div.doc {
+			border-radius: 5px;
+	        width: 30px;
+	        height: 30px;
+			background-size: 100%;
+	        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+			border-radius: 5px;
+	        /* background-size: 30px 60px; */
+	        /* background-size: 30px 45px; */
+	        background-size: 27px 30px;
+			background-repeat: no-repeat;
+			background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/doctype/unknown.svg')});
+			margin-top: 2px;
+		}
+		
+input[type=checkbox]:not(old) {
+  width     : 2em;
+  margin    : 0;
+  padding   : 0;
+  font-size : 1em;
+  opacity   : 0;
+}
+
+input[type=checkbox]:not(old) + label {
+  display      : inline-block;
+  margin-left  : -2em;
+  line-height  : 1.5em;
+}
+
+input[type=checkbox]:not(old) + label > span {
+  display          : inline-block;
+  width            : 18px;
+  height           : 18px;
+  margin           : 0.25em 0.5em 0.25em 0.25em;
+  border           : 1px solid transparent; /* #bbc0c4; */
+  border-radius    : 5px;
+  background       : RGB(255, 255, 255);
+  vertical-align   : bottom;
+  padding: 2px;
+}
+
+input[type=checkbox]:not(old):checked + label > span {
+  background: rgb(42, 148, 214);
+}
+
+input[type=checkbox]:not(old):checked + label > span:before{
+  /* content     : 'x'; */
+  display     : block;
+  width       : 1em;
+  color       : rgb(153,204,102);
+  font-size   : 0.875em;
+  line-height : 1em;
+  text-align  : center;
+  font-weight : bold;
+  content: '';
+  height: 4px;
+  width: 9px;
+  border-bottom: 4px solid white;
+  border-left: 4px solid white;
+  -webkit-transform: translate(3px, 5px) rotate(-45deg);
+}		
+	
+		div.doc.WORD_T
+		{
+	        background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/doctype/word.svg')});
+		}
+		
+		div.doc.PDF {
+			background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/doctype/pdf.svg')});
+		}
+		
+		div.doc.JPG, div.doc.PNG {
+			background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/doctype/image.svg')});
+		}
+		
+		/* End Page specific CSS */
+	
+	
+		.ui-radio .ui-btn.ui-radio-on:after {
+			width: 12px;
+			height: 12px;
+		}
+	
+		html .ui-page-theme-c .ui-radio-on:after, html .ui-bar-c .ui-radio-on:after, html .ui-body-c .ui-radio-on:after, html body .ui-group-theme-c .ui-radio-on:after, html .ui-btn.ui-radio-on.ui-btn-c:after {
+			background-color: #fff;
+			color: #2a94d6 !important;
+		}	
+		
+		
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+		
+		
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icon-utility.ttf')}");
+		}
+	
+	
+	div.toolbar i.fa {
+		font-size: 1.8em;
+		padding: 10px;
+	}
+	
+	
+	</style>
+	
+
+</apex:page>

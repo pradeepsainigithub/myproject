@@ -1,0 +1,92 @@
+<apex:page >
+
+<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+
+	<script>
+	// **** START AJAX wrapper with Token ****
+		var s1token = window.localStorage.getItem('s1token');
+		var s1tokenexpires = window.localStorage.getItem('s1tokenexpires');
+	
+		function getNewToken(callback) {
+			$.ajax({
+				type: "GET",
+				cache: false,
+				dataType: "json",
+				url: "{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/token?sessionId={!$Api.Session_ID}&serverUrl={!$Api.Partner_Server_URL_80}",
+				success: function(s1token){
+					console.info(s1token);
+					window.localStorage.setItem('s1token', s1token.token);
+					window.localStorage.setItem('s1tokenexpires', s1token.expires);
+					callback();
+				}
+			});
+		}
+		
+		function authenticate(callback) {
+			if (s1token) {	
+				if (s1tokenexpires < Date.now()) { getNewToken(function() { callback(); }); }
+				else { callback(); }
+			}
+			else
+			{
+				getNewToken(function() { callback(); });			
+			}
+		}
+	
+		function getIgnition(requestUrl, dataBundle, requestMethod, callback) {
+		    authenticate(function() {
+			    $.ajax({
+		       		url: requestUrl,			    
+			        async: false,
+			        data : dataBundle,
+			        type: requestMethod,
+			        dataType: 'json',			        
+					headers: { 'x-access-token' : window.localStorage.getItem('s1token'), 'x-access-user' : '{!$User.UserName}'},
+			        success: function (data) {
+			            callback(data);
+			        }
+			    });
+			}); 
+		};
+	// **** END AJAX wrapper with Token ****
+	</script>	
+
+<div id="bodywrap">
+	<h1>Manual News Scan</h1>
+	
+	<hr/>
+	
+	<div id="scanlink">
+		<div id="startscan">Click Here to Start Scan</div>
+	</div>
+	
+	<div id="jsonreply">
+	</div>
+</div>
+
+<script>
+	$(function() {
+		$('#startscan').click(function() {
+			var url = '{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/api/intakenews';
+			getIgnition(url, '', 'GET', function( data ) {
+				$('#jsonreply').text('status: ' + data.msg);
+				$('#scanlink').html('');
+				$('#scanlink').text('News scan requested.  Status of scan shown below.');				
+			});	
+		});
+	});	
+</script>
+
+<style>
+	#startscan {
+		color: #0645AD;
+		cursor: pointer;
+		cursor: hand;
+	}	
+	
+	#bodywrap {
+		padding: 20px;
+	}
+</style>
+
+</apex:page>

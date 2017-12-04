@@ -1,0 +1,865 @@
+<apex:page controller="s1m_corp_services"
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="true" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false" manifest="/apex/CacheManifest">
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/icons.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.mobile-1.4.0-rc.1.js')}"></script>
+
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/Class.create.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery-encoder-0.1.0.js')}"></script>
+	
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+
+  <div data-role="page" id="servicepage">
+  
+    <div data-role="header">
+      
+        <div class="headicon-wrap">
+        	<div class="headicon-help">
+        	</div>
+        </div>
+      
+      <h1 id="officelocation">Kōkua</h1>
+            
+      <h2 class="subtext"><span id="eventcount"></span></h2>
+        
+
+    </div>
+
+    <div data-role="content">
+    
+    
+    
+    	<div class="loader" id="mainloader">
+		</div>
+        
+        <div class="wrapper">
+			<ul id="eventsoffice" data-role="listview" data-inset="true">
+			</ul>
+	
+			<ul id="eventscity" data-role="listview" data-inset="true">
+			</ul>
+			
+			<ul id="eventsglobal" data-role="listview" data-inset="true">
+			</ul>
+		</div>
+				
+    </div>
+
+  </div>
+
+
+  <div data-role="page" id="filter">
+  
+    <div data-role="content">  	
+  	
+  		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" style="padding:0px">
+  			<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+				<h2>Select Corporate Location or Service</h2>
+			</li>
+			<li>
+
+		      <div data-role="fieldcontain" class="selectmenu">
+		        <select name="opprange" id="opprange" data-native-menu="false" data-theme="a" data-icon="carat-r">
+		          <option value="none">Select Corporate Location</option>
+		          <option value="3">Office / Campus</option>
+		          <option value="10">City Wide</option>
+		          <option value="100">Global Services</option>
+		        </select>
+		      </div>
+
+		<div class="wrapper">
+			<div data-theme="f" id="submitfilter" class="ui-btn ui-btn-f ui-shadow ui-corner-all half">submit</div>
+			<div data-theme="c" id="cancel"  class="ui-btn ui-btn-c ui-shadow ui-corner-all half">cancel</div>
+		</div>
+
+
+			</li>
+		</ul>
+	
+
+	</div>
+  </div>
+
+<script>
+
+	// Navigation for filters
+    $('#submitfilter').on("tap", function() { 
+    	// Refresh the list based on filter settings
+    	loadLocalEntities();
+    	$.mobile.changePage( "#servicepage", { transition: "slideup", changeHash: false });
+    });
+
+    $('#cancel').on("tap", function() {
+    	$.mobile.changePage( "#servicepage", { transition: "fade", changeHash: false });
+    });
+	// End navigation for filters
+	
+	
+
+	function distance(lat1, lon1, lat2, lon2, unit) {
+		var radlat1 = Math.PI * lat1/180
+		var radlat2 = Math.PI * lat2/180
+		var radlon1 = Math.PI * lon1/180
+		var radlon2 = Math.PI * lon2/180
+		var theta = lon1-lon2
+		var radtheta = Math.PI * theta/180
+		var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+		dist = Math.acos(dist)
+		dist = dist * 180/Math.PI
+		dist = dist * 60 * 1.1515
+		if (unit=="K") { dist = dist * 1.609344 }
+		if (unit=="N") { dist = dist * 0.8684 }
+		return dist
+	}
+		
+	
+	
+	function loadLocalEntities() {
+	
+		// Reset list
+		$('#eventsoffice').html('');
+		$('#eventscity').html('');
+		$('#eventsglobal').html('');
+		$('#mainloader').show();
+	
+		var lat, lon;
+	
+             if (navigator.geolocation) {
+                          
+                 navigator.geolocation.getCurrentPosition(
+                     function(position){
+                     
+                     lat = position.coords.latitude;
+                     lon = position.coords.longitude;
+                     
+                     console.log('geo lat: ' + lat + ', ' + lon);
+                     distanceValue = $('#opprange').val();
+                     
+                     // Set default distance value if actual selection is not made
+                     if (distanceValue == 'none')
+                     {
+                     	distanceValue = 3;
+                     }
+                     
+                     Visualforce.remoting.Manager.
+                     invokeAction(
+                         '{!$RemoteAction.s1m_corp_services.getLocalServices}', 
+                         lat, lon, distanceValue, 
+				        function(matches, event){
+				            
+				            allMatchCount = 0;
+				            
+				            if (matches) {
+				            	$('#officelocation').html(matches.nearestOfficeName);
+				            }
+				            				            
+				            // Able to get results
+				            if (event.status) {
+
+							var officeList = '';
+							officePlural = '';
+							
+							officeCount = (matches.officeServices) ? (matches.officeServices.length) : ('No Nearby');
+							
+							if (matches.officeServices) {
+								officePlural = (matches.officeServices.length > 1) ? ('s') : ('');
+							}
+							
+							officeList += '<li data-role="list-divider" data-theme="a" role="heading" class="ui-li-divider ui-bar-a ui-first-child">' + officeCount + ' Office Service' + officePlural + '</li>';
+							
+							if (matches.officeServices)
+							{
+								$.each(matches.officeServices, function() {
+									
+									locDistance = distance(lat, lon, this.Latitude, this.Longitude, 'M');
+									imgurl = (this.photo) ? this.photo : '{!URLFOR($Resource.stylepack, 'stylepack/img/kokua-120.png')}';
+									phone = (this.phone) ? '<i class="fa fa-phone callbutton" data-phone="' + $.encoder.encodeForHTML(this.phone) + '"></i>' : '';
+									
+									officeList += '<li class="appointment" data-serviceid="' + this.Id + '">' +
+												'		<div class="photo" style="background-image:url(\'' + imgurl + '\');"></div> ' +
+												'		<div class="servicewrap"><h1>' + $.encoder.encodeForHTML(this.servicetype) +
+												'		</h1>' +
+												'	<p>' + $.encoder.encodeForHTML(this.contactname) + '</p>' +
+												'	<p>' + $.encoder.encodeForHTML(this.servicedescription) + '</p></div>' +		
+												phone + 											
+												'</li>';
+									allMatchCount += 1;
+								});
+							}							
+							
+							
+							var cityList = '';
+							cityPlural = '';
+							
+							cityCount = (matches.cityServices) ? (matches.cityServices.length) : ('No Nearby');
+							
+							if (matches.cityServices) {
+								cityPlural = (matches.cityServices.length > 1) ? ('s') : ('');
+							}
+							
+							cityList += '<li data-role="list-divider" data-theme="a" role="heading" class="ui-li-divider ui-bar-a ui-first-child">' + cityCount + ' City Service' + cityPlural + '</li>';
+							
+							if (matches.cityServices)
+							{
+								$.each(matches.cityServices, function() {
+									
+									locDistance = distance(lat, lon, this.Latitude, this.Longitude, 'M');
+									imgurl = (this.photo) ? this.photo : '{!URLFOR($Resource.stylepack, 'stylepack/img/kokua-120.png')}';
+									phone = (this.phone) ? '<i class="fa fa-phone callbutton" data-phone="' + $.encoder.encodeForHTML(this.phone) + '"></i>' : '';
+										
+									cityList += '<li class="appointment" data-serviceid="' + $.encoder.encodeForHTML(this.Id) + '">' +
+												'		<div class="photo" style="background-image:url(\'' + imgurl + '\');"></div> ' +
+												'		<div class="servicewrap"><h1>' + $.encoder.encodeForHTML(this.servicetype) +
+												'		</h1>' +
+												'	<p>' + $.encoder.encodeForHTML(this.contactname) + '</p>' +
+												'	<p>' + $.encoder.encodeForHTML(this.servicedescription) + '</p></div>' +			
+												phone +										
+												'</li>';
+									allMatchCount += 1;
+								});
+							}														
+							
+							//eventsglobal
+							
+							globalList = '';
+							globalPlural = '';
+							
+							globalCount = (matches.globalServices) ? (matches.globalServices.length) : ('No Nearby');
+							
+							if (matches.globalServices)
+							{
+								globalPlural = (matches.globalServices.length > 1) ? ('s') : ('');
+							}
+							
+							globalList += '<li data-role="list-divider" data-theme="a" role="heading" class="ui-li-divider ui-bar-a ui-first-child">' + globalCount + ' Global Service' + globalPlural + '</li>';							
+							
+							if (matches.globalServices)
+							{
+								$.each(matches.globalServices, function() {
+									
+									imgurl = (this.photo) ? this.photo : '{!URLFOR($Resource.stylepack, 'stylepack/img/kokua-120.png')}';
+									phone = (this.phone) ? '<i class="fa fa-phone callbutton" data-phone="' + $.encoder.encodeForHTML(this.phone) + '"></i>' : '';
+																								
+									globalList += '<li class="appointment" data-serviceid="' + $.encoder.encodeForHTML(this.Id) + '">' +
+												'		<div class="photo" style="background-image:url(\'' + imgurl + '\');"></div> ' +
+												'		<div class="servicewrap"><h1>' + $.encoder.encodeForHTML(this.servicetype) +
+												'		</h1>' +
+												'	<p>' + $.encoder.encodeForHTML(this.contactname) + '</p>' +
+												'	<p>' + $.encoder.encodeForHTML(this.servicedescription) + '</p></div>' +	
+												phone +										
+												'</li>';
+									//allMatchCount += 1;
+								});
+							}							
+							
+							if (allMatchCount > 0)
+							{
+								
+								if (allMatchCount > 1)
+								{
+									$('#eventcount').html(allMatchCount + ' Services Near You');
+								}
+								else
+								{
+									$('#eventcount').html(allMatchCount + ' Service Near You');
+								}
+							}
+							
+							$('#mainloader').hide();
+													
+							$('#eventsoffice').append(officeList);
+							$('#eventsglobal').append(globalList);
+							$('#eventscity').append(cityList);
+		    				
+		    				$('#eventsoffice').listview('refresh');
+		    				$('#eventsglobal').listview('refresh');
+		    				$('#eventscity').listview('refresh');
+		    				
+		    				// Activate phone number links
+		    				$('i.callbutton').each(function() {
+						        $(this).wrap("<a href='tel:" + $(this).data("phone") + "'/>");
+						    });
+		    				
+		    				$('#eventsoffice, #eventscity, #eventsglobal').fadeIn();
+		
+					            	
+			            } else if (event.type === 'exception') {
+			                // Error...
+			                console.log('Error');
+			            } else {
+			                // Error...
+			                console.log('Error');
+			            }
+			        }, 
+			        {escape: true}
+		                      );
+		                  });
+              } else {
+  	
+  					// TODO - message that geolocation is not avail...
+                    lat = 37.77493;
+                    lon = -122.419416;                    
+                    var result = [];
+              }
+        }
+
+		
+		$(function() {
+			loadLocalEntities();
+		});
+		
+
+	
+</script>
+	
+	
+	<!--  Footer includes --> 	
+	<style>
+	
+	/* For ONLY this page */
+	
+	.ui-listview > .ui-li-static
+	{
+		padding: 0px 14px;
+	}
+	
+	div.servicewrap
+	{
+		float: left;
+		width: 62%;
+		margin-top: 12px;
+		margin-bottom: 8px;
+	}
+	
+	i.callbutton
+	{
+float: right;
+font-size: 2em;
+color: #ccc;
+/* width: 35px; */
+/* margin-top: 5px; */
+padding: 38px 14px;
+/* background: #FAFAFA; */
+/* margin-top: -11px; */
+margin-bottom: -20px;
+margin-right: -14px;
+	}
+	
+	div.photo {
+	float: left;
+width: 45px;
+height: 45px;
+background: #F0F1F2;
+border-radius: 5px;
+margin-right: 14px;
+margin-top: 14px;
+margin-bottom: 14px;
+background-size: 45px 45px;
+
+	}
+	
+	
+.ui-listview > li h1
+{
+	margin: 0px;
+}	
+
+	
+	#eventsoffice, #eventscity, #eventsglobal {
+		display: none;
+	}
+	
+	.headicon-help {
+		border-radius: 5px;
+        width: 60px;height: 60px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-image:url('{!URLFOR($Resource.stylepack, 'stylepack/img/kokua-120.png')}');
+        background-size: 60px 60px;
+        background-color:#AA47BA;
+    }
+	
+	
+	
+		.ui-listview > li h2.accountname {
+			margin-top: 18px;
+		}
+	
+		i.filtericon
+		{
+			margin-top: 10px; 
+			font-size: 1.6em;
+			margin-left: 14px;		
+		}
+	
+	
+		li.appointmentopp {
+			font-size: 15px;
+			padding: 1.3em 1em;
+		}
+
+		li.appointmentopp .kpiright.opp {
+			top: -10px;
+		}
+	
+		div.drivemap {
+			background: #f9f9f9;
+			border-radius: 100px;
+			width: 50px;
+			height: 40px;
+			padding-top: 10px;
+		}
+	
+		li.appointment {
+			min-height: 60px;
+		}
+		
+		div.dateband {
+			color: #333;
+			width: 50px;
+			padding: 0px 8px 0px 15px;
+			text-align: center;
+			position: absolute;
+			left: 0px;
+		}
+		
+		div.dateband h1 {
+			font-size: .9em;
+		}
+		
+		div.kpiright.opp div.circle {
+			margin-top: 0px;
+		}
+		
+		div.oppname {
+			width: 84%;
+		  white-space: nowrap;
+		  overflow: hidden;
+		  text-overflow: ellipsis;
+		}
+		
+		.ui-btn.half
+		{
+			width: 40%;
+			float: left;
+		}
+		
+		.ui-btn.half:last-child
+		{
+			float: right;
+		}
+
+/* SELECT LISTS */		
+		.ui-field-contain, .ui-mobile fieldset.ui-field-contain {
+padding: .4em 0;
+}
+
+html .ui-page-theme-a .ui-btn, html body .ui-group-theme-a .ui-btn
+{
+	background: #F0F1F2;
+	color: #333;
+	border-color: #ccc;
+}
+/* END SELECT LISTS */
+
+	/* // For ONLY this page */
+
+html .ui-page-theme-a div.selectmenu a.ui-btn
+{
+text-align: left;
+padding: 14px;
+background: #fff;
+color: #333;
+font-weight: normal;
+border: 1px solid #dfe0e1;
+}
+
+
+
+.ui-icon-carat-d:after
+{
+	background-image: none;
+}
+
+
+		body .ui-radio2 .ui-btn.ui-btn-c
+		{
+			/* background: #2A93D5; */
+			border-color: transparent;
+			color: #333;
+			
+			background: #fff;				
+		}
+		
+		div.ui-radio2 {
+			float: left;
+		}
+		
+		body .ui-radio2 .ui-btn.ui-btn-c, body .ui-radio2 .ui-btn.ui-btn-c:active, body .ui-radio2 .ui-btn.ui-btn-c:hover
+		{
+			background: #fff;
+			color: #333;
+			border: 1px transparent;
+		}		
+
+
+		h2.subtext.ui-title {
+			width: 100%;
+			margin: auto;
+		}	
+	
+
+		.indicator-font-neg1 {
+			color: #E15D76 ! important;
+		}
+
+		.indicator-font-neg0 {
+			color: #E1BE5C ! important;
+		}
+
+		.indicator-font-neutral {
+			color: #E3E1E2 ! important;
+		}
+		
+		.indicator-font-50
+		{
+			color: #F3AE4E ! important;
+		}
+		
+		.indicator-font-no-product {
+			color: #eeeeee ! important;
+		}
+
+		.indicator-font-pos0 {
+			color: #B8EB9F ! important;
+		}
+
+		.indicator-font-pos1 {
+			color: #4BC076 ! important;
+		}	
+	
+		.indicator-neg1 {
+			background: #E15D76 ! important;
+		}
+
+		.indicator-neg0 {
+			background: #E1BE5C ! important;
+		}
+
+		.indicator-neutral {
+			background: #E3E1E2 ! important;
+		}
+
+		.indicator-pos0 {
+			background: #B8EB9F ! important;
+		}
+
+		.indicator-pos1 {
+			background: #4BC076 ! important;
+		}		
+		
+		div.event .dealfuel {
+			opacity: .5;
+			color: #fff;
+			font-size:1.8em;
+			margin-top: 5px;
+		}
+
+		div.kpiright.opp .dealfuel {
+			opacity: 1;
+			font-size:1.4em;
+			margin-top: 5px;
+			margin-top: 20px;
+			margin-left: 14px;
+		}
+	
+		.dotwrapper {
+			text-align:center;
+			margin-top: -20px;
+		}
+	
+		.dotmarker {
+			color:#344A5F;
+			font-size: 4em;
+		}
+	
+	
+	
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+
+		div.optionstop {
+			margin-bottom: -10px;
+			margin-top:4px;
+		}
+		
+		i.fa.fa-car {
+			font-size: 2em;
+			margin-top: 10px;
+		}
+	
+		a.filtericon span.icon-utility-filter {
+			color: #333;
+		}
+
+		div.headicon {
+			text-align: center;
+		}
+
+		div.headicon i.fa {
+			margin-top: 12px;
+		}
+		
+		div.headicon
+		{
+			border-radius: 5px;
+	        width: 60px;height: 60px; margin: auto; background-size: 100%;
+	        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+			border-radius: 5px;
+			background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+	        background-size: 60px 60px;
+	        background-color:#53b6d7;font-size:2.4em;text-align:center;
+		}
+
+	
+		.dotwrapper {
+			text-align:center;
+			margin-top: -20px;
+		}
+	
+		.dotmarker {
+			color:#344A5F;
+			font-size: 4em;
+		}
+	
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}');
+			background-size:38px;
+			margin-top:50%;			
+		}
+
+	
+		.badge0 {
+			background: #E15D76 ! important;
+		}
+
+		.badge50 {
+			background: #E1BE5C ! important;
+		}
+
+		.badge100 {
+			background: #8BCF6A ! important;
+		}
+
+	
+		div.contacticons {
+			font-size: 2em;
+			color: #333;
+		}
+	
+		div.accountdetail {
+			background:#fff;
+			padding:4px;
+			z-index:99;
+			border:1px solid #f5f5f6;
+			margin-bottom: 20px;
+			width: 90%;
+			margin-left:4%;
+			-webkit-border-bottom-right-radius: 5px;
+			-webkit-border-bottom-left-radius: 5px;
+			-moz-border-radius-bottomright: 5px;
+			-moz-border-radius-bottomleft: 5px;
+			border-bottom-right-radius: 5px;
+			border-bottom-left-radius: 5px;
+		}
+		
+		.ui-content .ui-listview-inset, .ui-panel-inner > .ui-listview-inset {
+			margin: 1em 0em 1em 0em;
+		}
+	
+		div.eventloading {
+			width: 36px;
+			height: 36px;
+			background-position:center;
+			background-repeat: none;
+			border-radius: 36px; 
+		}
+	
+	
+
+		
+		div.dateband h1 {
+			margin-right: -2px;
+		}
+	
+		li.appointment {
+			/* min-height: 100px; */
+			
+		}
+	
+		div.circle {
+		background:none; color:#ccc;width:30px;height:30px;border-radius:50px;
+				padding-top:0px;margin:auto; margin-top:20px;font-size:1em;line-height:2em;margin-right: 10px;
+		}
+	
+		.kpiright {
+			color:#eee;width:38px; 
+        	padding-right: 20px;text-align:center;height: 100%; position: absolute;right:0px;top:0px;
+		}
+	
+		div.education {
+			height: 40px;
+			width: 40px;
+		}
+	
+		.event {
+			height: 40px;
+			width: 40px;
+			background: #ddd;
+			border-radius: 5px; 
+			color: #333;
+		}
+		
+		div.circlewrap {
+			margin: 10px;
+			background: #efefef;
+/*			border: 1px solid #ddd; */
+			height: 40px;
+			width: 40px;
+			border-radius: 5px;			
+		}
+	
+		
+		div.circlewrap {
+			height:18px;
+			width:36px;
+			margin-top: 19px;
+			margin-bottom: 1px;
+		     border-radius: 0 0 36px 36px;
+		     -moz-border-radius: 0 0 36px 36px;
+		     -webkit-border-radius: 0 0 36px 36px;
+		}
+		
+		div.setimentpos1 {
+			background: #4CC3C7;
+		}
+
+		div.setimentneg1 {
+			background: #F49756;
+		}
+		
+		div.blockdetail.copilot {
+			margin-right: 40px;
+			margin-left: 58px;
+		}
+		
+		div.blockdetail.innerdetail
+		{
+			margin-left: 0px;
+			margin-right: 0px;
+		}
+		
+		
+	span.filter {
+font-size: 24px;
+line-height: 1.6em;
+float: right;
+margin-right: 14px;
+margin-top: -2px;
+color: #333;
+}		
+
+		
+		div.libfolder div {
+			float:left;
+			width: 100%;
+			border-top:1px solid #F0F1F2;
+			padding:12px;
+			margin-left: -12px;
+			color: #2a94d6;
+		}	
+	
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icon-utility.ttf')}");
+		}
+	
+	
+/*	div.toolbar i.fa {
+		font-size: 1.8em;
+		padding: 10px;
+	}*/
+	
+
+	
+	div.toolbar i.fa {
+		font-size: 1.6em;
+		padding: 11px 0px 12px 0px;
+	}
+	
+	.headicon-wrap {
+		width: 60px;height: 60px; margin: auto;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+border-radius: 5px;
+background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+background: linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+padding-bottom: 14px;
+	}
+	
+	.headicon-event {
+		border-radius: 5px;
+        width: 60px;height: 60px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/custom/custom20.svg')});
+        background-size: 60px 60px;
+        background-color:#53b6d7;
+    }
+    
+    
+html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-a.toolbar.center, html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-b.toolbar.center {
+color: #fff;
+text-align: center;
+background: #293f54;
+border-top: 1px solid #203345;
+}
+
+html .ui-bar-a, html .ui-page-theme-a .ui-bar-inherit, html .ui-bar-a .ui-bar-inherit, html .ui-body-a .ui-bar-inherit, html body .ui-group-theme-a .ui-bar-inherit {
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);
+}    	
+	
+	
+	
+	</style>
+
+	<!--  // End Footer includes -->
+	
+	
+	
+</apex:page>

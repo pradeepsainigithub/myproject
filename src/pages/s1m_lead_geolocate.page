@@ -1,0 +1,165 @@
+<apex:page standardController="Lead"
+           sidebar="false" 
+           showHeader="false" 
+           standardStylesheets="false">
+           
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.10&sensor=false"></script>
+    <script src="/soap/ajax/27.0/connection.js" type="text/javascript"></script>
+    <script src="/soap/ajax/27.0/apex.js" type="text/javascript"></script>
+    
+    <script type="text/javascript">
+        var Lead = {};
+        function authorize()
+        { sforce.connection.sessionId = '{!GETSESSIONID()}'; }      
+    
+        function getLeadID() 
+        {
+         Lead.ID = '{!Lead.Id}';
+        }
+
+        function fetchLeadRecord()
+        {
+         result = sforce.connection.query('SELECT ID,Street,City,State,PostalCode,Country,S1M_Location__Latitude__s,' +
+         'S1M_Location__Longitude__s,S1M_Mapping_Status__c FROM Lead WHERE ID=\'' + Lead.ID + '\' AND S1M_Mapping_Status__c!=\'Located\'');
+         records = result.getArray('records');
+         if(records.length>0)
+         {
+          Lead.IsRecordAvailable = true;
+          Lead.Street = records[0].Street;
+          Lead.City = records[0].City;
+          Lead.State = records[0].State;
+          Lead.PostalCode = records[0].PostalCode;
+          Lead.Country = records[0].Country;
+          Lead.Status = records[0].S1M_Mapping_Status__c;
+         }
+         else
+          Lead.IsRecordAvailable = false;
+        }
+
+        Lead.isAddressAvailable = function(){
+         //if (this.Country!='' && this.PostalCode!='')
+           return true;
+         //else
+         // return false; 
+        }
+
+        Lead.isMapped = function(){
+         if (this.MappingStatus=='Located' || this.MappingStatus=='Problem with Address')
+          return true;
+         else
+          return false; 
+        }
+
+        Lead.getCSVAddress = function(){
+         if(this.isAddressAvailable())
+         {
+         
+         	var CSVAddressInfo = '';
+         	
+         	if (this.Street)
+         	{
+         		CSVAddressInfo += this.Street +',';
+         	}
+
+         	if (this.City)
+         	{
+         		CSVAddressInfo += this.City +',';
+         	}
+
+         	if (this.State)
+         	{
+         		CSVAddressInfo += this.State +',';
+         	}
+
+         	if (this.PostalCode)
+         	{
+         		CSVAddressInfo += this.PostalCode +',';
+         	}
+
+         	if (this.Country)
+         	{
+         		CSVAddressInfo += this.Country;
+         	}         	         	         	          
+         	
+          return (
+                  CSVAddressInfo
+                 );
+         }
+
+         return 'error'; 
+        }   
+
+        function getLatLng() 
+        { 
+         geocoder = new google.maps.Geocoder();
+         console.log("Trying: " + Lead.getCSVAddress());
+         geocoder.geocode( 
+         { 'address': Lead.getCSVAddress() }, 
+         function(results, status) 
+         { 
+         	console.log(google.maps.GeocoderStatus);
+          if (status == google.maps.GeocoderStatus.OK) 
+          { 
+            Lead.Latitude  = (results[0].geometry.location.lat()).toString();  
+            Lead.Longitude = (results[0].geometry.location.lng()).toString();  
+            Lead.MappingStatus = 'Located'; 
+          } 
+          else if (status == google.maps.GeocoderStatus.ZERO_RESULTS || status == google.maps.GeocoderStatus.INVALID_REQUEST) 
+          { 
+           Lead.MappingStatus = 'Problem with Address'; 
+          } 
+          else if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT) 
+          { 
+           Lead.MappingStatus = 'Google Exhausted'; 
+          }  
+          updateLead(); 
+         }); 
+        }
+
+        function updateLead() 
+        { 
+         var mappedLead = new sforce.SObject('Lead');  
+
+         mappedLead.S1M_Location__Latitude__s  = null; 
+         mappedLead.S1M_Location__Longitude__s = null;  
+
+         if(Lead.MappingStatus == 'Located') 
+         { 
+          mappedLead.S1M_Location__Latitude__s  = Lead.Latitude; 
+          mappedLead.S1M_Location__Longitude__s = Lead.Longitude; 
+         }  
+         mappedLead.id = Lead.ID; 
+         mappedLead.S1M_Mapping_Status__c = Lead.MappingStatus;
+
+         result = sforce.connection.update([mappedLead]);  
+
+         if(result[0].getBoolean('success')) 
+         { 
+          $('#status').fadeIn();
+          $('#status').html('The Lead\'s new Address has been located Successfully. Please Refresh the Page.');
+         } 
+         else
+         { 
+          $('#status').fadeIn();
+          $('#status').html(Lead.MappingStatus);
+         } 
+        }   
+        
+        $(document).ready(
+         function()
+         {
+         console.log('loading...');
+          authorize();
+          getLeadID();
+          fetchLeadRecord();
+          if(Lead.IsRecordAvailable && !Lead.isMapped() && Lead.isAddressAvailable())
+          {
+           getLatLng();
+          }
+         });
+    </script>
+<div id="status" style="display:none;background-color: #f8f8f8;color: #000;border-top-left-radius: 3px;border-top-right-radius: 3px;
+border-bottom-right-radius: 3px;border-bottom-left-radius: 3px;width: 90%;float: left;font-family: arial;
+background-position: initial initial;background-repeat: initial initial;margin: 20px;padding: 10px;font-size: .9em;"></div>   
+ </apex:page>

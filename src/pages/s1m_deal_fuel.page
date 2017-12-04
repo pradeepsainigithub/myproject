@@ -1,0 +1,823 @@
+<apex:page standardController="Opportunity" extensions="s1m_deal_fuel" 
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="true" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false" manifest="/apex/CacheManifest">
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/icons.css')}"></link>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.mobile-1.4.0-rc.1.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.touchSwipe.min.js')}"></script>
+
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/Class.create.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery-encoder-0.1.0.js')}"></script>
+
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+	<script>
+	// **** START AJAX wrapper with Token ****
+		var s1token = window.localStorage.getItem('s1token');
+		var s1tokenexpires = window.localStorage.getItem('s1tokenexpires');
+	
+		function getNewToken(callback) {
+			$.ajax({
+				type: "GET",
+				cache: false,
+				dataType: "json",
+				url: "{!JSENCODE($Setup.S1M_Heroku_Services__c.S1M_Heroku_App_URL__c)}/token?sessionId={!$Api.Session_ID}&serverUrl={!$Api.Partner_Server_URL_80}",
+				success: function(s1token){
+					console.info(s1token);
+					window.localStorage.setItem('s1token', s1token.token);
+					window.localStorage.setItem('s1tokenexpires', s1token.expires);
+					callback();
+				}
+			});
+		}
+		
+		function authenticate(callback) {
+			if (s1token) {	
+				if (s1tokenexpires < Date.now()) { getNewToken(function() { callback(); }); }
+				else { callback(); }
+			}
+			else
+			{
+				getNewToken(function() { callback(); });			
+			}
+		}
+	
+		function getIgnition(requestUrl, dataBundle, requestMethod, callback) {
+		    authenticate(function() {
+			    $.ajax({
+		       		url: requestUrl,			    
+			        async: false,
+			        data : dataBundle,
+			        type: requestMethod,
+			        dataType: 'json',				        
+					headers: { 'x-access-token' : window.localStorage.getItem('s1token'), 'x-access-user' : '{!$User.UserName}'},
+			        success: function (data) {
+			            callback(data);
+			        }
+			    });
+			}); 
+		};
+	// **** END AJAX wrapper with Token ****
+	</script>	
+
+	<script>
+	    $(document).bind("mobileinit", function(){
+			$.mobile.pushStateEnabled = false;
+		});
+	</script>
+
+  <div data-role="page"> 
+
+    <div data-role="panel" id="panel" data-position="right" data-theme="a" data-display="push">X</div>
+
+    <div data-role="header">
+      
+      <div class="headicon-wrap">
+	      <div class="headicon">
+	      	<i class="fa fa-bolt"></i>
+	        </div>
+	  </div>      
+      
+      <h1>Deal Fuel</h1>
+      <h2 class="subtext">{!opportunity.Name}</h2>
+
+		<div class="wrapper" style="margin-bottom: 14px;">
+			<div class="chartregion">
+			 	<div class="record">
+			 		<div class="bar"><span id="matchinfo">&nbsp;</span></div>
+			 		<div class="p"></div>
+			 	</div>
+			</div>
+		</div>
+
+   
+    </div>
+
+    <div data-role="content">
+    
+		<div class="loader" id="materialsloader"></div>
+
+		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" id="nomatches">
+        	<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+			<p>
+                No products assigned to this Opportunity
+              </p>
+        	</li>
+      	</ul>   
+		
+
+       	<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" id="requiredBadges">
+   		</ul>
+              
+	
+		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" id="materials">
+      	</ul>
+
+		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" id="experts">
+        	<li class="ui-li-static ui-body-inherit ui-first-child ui-last-child">
+			<p>
+                Experts
+              </p>
+        	</li>
+      	</ul>
+      	
+		<ul data-role="listview" data-inset="true" class="ui-listview ui-listview-inset ui-corner-all ui-shadow" id="references">
+      	</ul>   	
+      	
+      	
+    </div>
+  </div>
+
+	
+	
+	<script>
+	
+	
+		// For JS encoder
+		var immune; 
+	
+		var oppIds = [];
+	    oppIds.push('{!JSENCODE($CurrentPage.parameters.id)}');
+				
+		Visualforce.remoting.Manager.invokeAction(
+	        '{!$RemoteAction.s1m_deal_fuel.getUserBadges}', 
+	        function(resultUserBadge, event){
+	            if (event.status) {
+	                
+	                // Get User Badges
+	               	Visualforce.remoting.Manager.invokeAction(
+				        '{!$RemoteAction.s1m_deal_fuel.getRequiredBadges}', 
+				        oppIds,
+				        function(resultOptyProducts, event){
+				            if (event.status) {
+				                
+				                // data-oppid Holds Opty Id				                
+				                $(oppIds).each(function (index, badgeVal) {
+							       	
+							       	currentOpty = badgeVal;
+							       	 							       	
+							       	var productsWithOpty = $.grep(resultOptyProducts[0], function(v) {
+									    return v[0] == currentOpty;
+									});
+									
+									var badgesForOppty = [];
+									var requiredBadges = [];
+									var totalOpptyBadgeMatch = 0;
+									var badgeList = '';
+									
+									// Products for the oppty
+									$.each(productsWithOpty, function( i, val ) {
+										
+										// Get the badges needed for each Oppty
+										$.each(resultOptyProducts[1], function( i, productBadgeMap ) {
+																				
+											if (productBadgeMap[1] == val[1])
+											{
+												badgesForOppty.push(productBadgeMap[0]);
+												 
+												// Check against badges earned by the user
+												$.each(resultUserBadge, function( i, userEarned ) {
+												    console.log('... trying match for ... ' + userEarned + ' against ' + productBadgeMap[0]);
+												    
+												    // TODO - use the badge icon to make clean!!!
+												    // <i class="fa fa-certificate"></i>
+												    
+												    if (userEarned == productBadgeMap[0]) {
+														// Badges user has
+														badgeList += ' <li>' + 
+																   '<div class="ui-grid-a" style="text-align:center">' +          
+												           		   '	<div class="ui-block-a" style="width:70%;text-align:left;">' +
+																	'       <p> ' + $.encoder.encodeForHTML(productBadgeMap[3]) + '</p>' +
+																	'	</div>	' +
+													           		'	<div class="ui-block-b" style="width:30%" class="sidetab">' +
+																	'       <div class="indicator-font-pos1 badge"><i class="fa fa-certificate"></i></div>' +
+													           		'	</div>' +
+													      			'</div>' +
+																	'</li>';
+														console.log('badge match ! ! !');
+												    	totalOpptyBadgeMatch += 1;
+												    }
+												    else {
+												    	
+												    	badgeList += ' <li>' + 
+																   '<div class="ui-grid-a" style="text-align:center">' +          
+												           		   '	<div class="ui-block-a" style="width:70%;text-align:left;">' +
+																	'       <p> ' + $.encoder.encodeForHTML(productBadgeMap[3]) + '</p>' +
+																	'	</div>	' +
+													           		'	<div class="ui-block-b" style="width:30%" class="sidetab">' +
+																	'       <div class="indicator-font-neg1 badge"><i class="fa fa-certificate"></i></div>' +
+													           		'	</div>' +
+													      			'</div>' +
+																	'</li>';
+																	
+												    	requiredBadges.push(productBadgeMap[0]);
+												    }
+												});
+												
+												$('#requiredBadges').html(badgeList);
+												$('#requiredBadges').listview('refresh');
+												
+											}
+										});
+									});
+																		
+									
+									// Find Class materials to help educate
+									Visualforce.remoting.Manager.invokeAction(
+								        '{!$RemoteAction.s1m_deal_fuel.getClassMaterialForBadges}', 
+								        requiredBadges, 
+								        function(materialResult, event){
+								            if (event.status) {
+								                
+							                	newList = '';
+							                	
+							                	newList += '<li data-role="list-divider" data-theme="a" role="heading" class="ui-li-divider ui-bar-a ui-first-child">Quick Study</li>';
+							                	
+							                	if (materialResult.length < 1) {
+														newList += ' <li>' + 
+																   '<div class="ui-grid-a" style="text-align:center">' +          
+												           		   '	<div class="ui-block-a" style="width:70%;text-align:left;padding-right:10px;">' +
+																	'       <p> No matching materials found.</p>' +
+													      			'</div>' +
+																	'</li>';							                		
+							                	}
+							                	
+								                $.each(materialResult, function() {
+													if (this.type == 'Quiz' || this.type == 'Class')
+													{ 
+														newList += ' <li>' + 
+																   '<div class="ui-grid-a link' + $.encoder.encodeForHTML(this.type) + '" style="text-align:center" data-id="' + $.encoder.encodeForHTML(this.materialid) + '">' +          
+												           		   '	<div class="ui-block-a" style="width:70%;text-align:left;padding-right:10px;">' +
+																	'       <h2> ' + $.encoder.encodeForHTML(this.title) + '</h2>' +
+																	'       <p> ' + $.encoder.encodeForHTML(this.description) + '</p>' +
+																	'	</div>	' +
+													           		'	<div class="ui-block-b" style="width:30%" class="sidetab style' + $.encoder.encodeForHTML(this.type) + '">' +
+																	'       <div class="fueltype"> ' + $.encoder.encodeForHTML(this.type) + '</div>' +
+																	'       <div class="fueltime">' + $.encoder.encodeForHTML(this.timetocomplete) + 'm</div>' +
+													           		'	</div>' +
+													      			'</div>' +
+																	'</li>';
+													}		
+												});
+												
+												$('#materials').html(newList);
+												$('#materials').listview('refresh');
+												
+												
+												$('div.linkQuiz').on("tap", function() {
+													var quizUrl = '/apex/s1m_explain_quizzer?id=' + $.encoder.encodeForJavascript($(this).data("id"));
+													sforce.one.navigateToURL(quizUrl);	
+												});
+												
+												$('div.linkClass').on("tap", function() {
+													var classUrl = '/apex/s1m_explain_presenter?id=' + $.encoder.encodeForJavascript($(this).data("id"));
+													sforce.one.navigateToURL(classUrl);	
+												});
+												
+																								
+							                	newList = '';
+
+							                	newList += '<li data-role="list-divider" data-theme="a" role="heading" class="ui-li-divider ui-bar-a ui-first-child">References</li>';
+							                	
+							                	if (materialResult.length < 1) {
+														newList += ' <li>' + 
+																   '<div class="ui-grid-a" style="text-align:center">' +          
+												           		   '	<div class="ui-block-a" style="width:70%;text-align:left;padding-right:10px;">' +
+																	'       <p> No matching references found.</p>' +
+													      			'</div>' +
+																	'</li>';							                		
+							                	}
+							                	
+								                $.each(materialResult, function() {
+													if (this.type == 'Reference')
+													{ 
+														newList += ' <li>' + 
+																	'<div class="ui-grid-a link' + $.encoder.encodeForHTML(this.type) + '" style="width:100%;text-align:left;" data-id="' + $.encoder.encodeForHTML(this.materialid) + '">' + 
+																	'       <h2> ' + $.encoder.encodeForHTML(this.title) + '</h2>' +
+																	'       <p> ' + $.encoder.encodeForHTML(this.description) + '</p>' +
+																	'	</div>	' +
+																	'</li>';
+													}								
+												});
+												
+												$('#materialsloader').hide();
+														
+												$('#references').html(newList);
+												$('#references').listview('refresh');	
+												
+												$('div.linkReference').on("tap", function() {
+													var refUrl = '/apex/s1m_explain_presenter?id=' + $.encoder.encodeForJavascript($(this).data("id"));
+													sforce.one.navigateToURL(refUrl);	
+												});
+
+								                
+								            } else if (event.type === 'exception') {
+								                console.log(result);
+								            } else {
+								                console.log(result);
+								            }
+								        }, 
+								        {escape: true}
+								    );
+									
+									console.log('Matched ' + totalOpptyBadgeMatch + ' of ' + badgesForOppty.length);
+									
+									// If no badges were assigned to the oppty
+									if (badgesForOppty.length < 1)
+									{
+										$('.bar').css('background', 'transparent');
+										$('#nomatches').fadeIn();
+									}
+									else
+									{
+										$('#requiredBadges, #materials, #references').fadeIn();
+									}
+
+									// Set the chart UI
+									if (badgesForOppty.length > 0)
+									{
+										percentMatchNum = (totalOpptyBadgeMatch / badgesForOppty.length) * 100;
+										percentMatch =  percentMatchNum + '%';
+										$('div.bar').width(percentMatch);
+										if (percentMatch == '100%')
+										{
+											// Change the final ends to round
+											$('div.bar').css('border-radius', '5px 5px 5px 5px');
+										}
+										
+										// Background color for bar chart based on match to badges
+										if  (percentMatchNum >= 75)
+										{
+											$('div.bar').addClass('indicator-pos1');
+										}
+										else if  (percentMatchNum > 50)
+										{
+											$('div.bar').addClass('indicator-pos0');
+										}
+										else if  (percentMatchNum == 50)
+										{
+											$('div.bar').addClass('indicator-50');										
+										}
+										else if  (percentMatchNum >= 25)
+										{
+											$('div.bar').addClass('indicator-neg0');										
+										}
+										else
+										{
+											$('div.bar').addClass('indicator-neg1');										
+										}
+										
+										$('#matchinfo').text(percentMatch + ' Match');
+									}
+
+									// Use to drive the score chart under header									
+									var badgeScore = totalOpptyBadgeMatch / badgesForOppty.length;
+
+									// Colors for the scores... should standardize									
+									if (badgeScore > .5)
+								    {
+								    	  $("li.appointment[data-oppid='" + currentOpty + "'] .education").addClass('badge100');
+								    }
+								    if (badgeScore == .5)
+								    {
+								      	  $("li.appointment[data-oppid='" + currentOpty + "'] .education").addClass('badge50');
+								    }  
+								    if (badgeScore < .5) {
+								      	$("li.appointment[data-oppid='" + currentOpty + "'] .education").addClass('badge0');
+								    }
+																																	       
+							  	});				                
+				            } else if (event.type === 'exception') {
+				                console.log(event.message);
+				            } else {
+				                console.log(event.message);
+				            }
+				        }, 
+				        {escape: true}
+			    	);
+	                
+	            } else if (event.type === 'exception') {
+	                console.log(event.message);
+	            } else {
+	                console.log(event.message);
+	            }
+	        }, 
+	        {escape: true}
+    	);
+	
+	</script>
+	
+	
+	
+	<!--  Footer includes --> 
+	
+	<style>
+	
+	#requiredBadges, #materials, #references {
+		display: none;
+	}
+	
+	div.fueltime.linktextnorm, div.fueltype.linktextnorm {
+		font-size: 15px;
+		font-weight: 300;
+		line-height: normal;
+		font-family: 'ProximaNova', Arial, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	
+	div.fueltime.linktextnorm {
+		color: #333;
+	}
+	
+	div.fueltype.linktextnorm 
+	{
+		color: #fff;
+	}
+	
+	h2.linktextnorm
+	{
+		color: #333;
+	}
+	
+	
+	
+	h2.subtext.ui-title
+	{
+		padding: 0px 0px 14px 0px;
+	}
+	
+	#requiredBadges, #materials, #references, #experts, #nomatches {
+		display: none;
+	}
+	
+	
+html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-b.toolbar.center {
+color: #fff;
+text-align: center;
+background: #293f54;
+border-top: 1px solid #203345;
+}
+
+html .ui-bar-a, html .ui-page-theme-a .ui-bar-inherit, html .ui-bar-a .ui-bar-inherit, html .ui-body-a .ui-bar-inherit, html body .ui-group-theme-a .ui-bar-inherit {
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);
+}    
+	
+	
+		div.fueltype {
+background: #6AC0DC;
+color: #fff;
+text-align: center;
+display: table-cell;
+/* vertical-align: middle; */
+width: 100%;
+height: 30px;
+float: left;
+-webkit-border-top-left-radius: 5px;
+-webkit-border-top-right-radius: 5px;
+-moz-border-radius-topleft: 5px;
+-moz-border-radius-topright: 5px;
+border-top-left-radius: 5px;
+border-top-right-radius: 5px;
+padding-top: 10px;
+		}
+		
+		div.fueltime {
+			background: #efefef;
+			color: #333;
+			text-align: center;
+			display: table-cell;
+			vertical-align: middle;
+			width: 100%;
+			height: 30px;
+			padding-top: 10px;
+			float: left;
+			-webkit-border-bottom-right-radius: 5px;
+			-webkit-border-bottom-left-radius: 5px;
+			-moz-border-radius-bottomright: 5px;
+			-moz-border-radius-bottomleft: 5px;
+			border-bottom-right-radius: 5px;
+			border-bottom-left-radius: 5px;
+		}
+	
+	
+		#livecontent {
+			display: none;
+			padding-top: 14px;
+		}
+	
+/*		#requiredBadges {
+			float: left;
+			margin-left: -10px;
+			width: 100%;
+			padding: 10px 14px;
+		} */
+		
+		.indicator-50
+		{
+			color: #F3AE4E ! important;
+		}		
+		
+		.indicator-neg1 {
+			background: #E15D76 ! important;
+		}
+
+		.indicator-neg0 {
+			background: #E1BE5C ! important;
+		}
+
+		.indicator-neutral {
+			background: #E3E1E2 ! important;
+		}
+
+		.indicator-pos0 {
+			background: #B8EB9F ! important;
+		}
+
+		.indicator-pos1 {
+			background: #4BC076 ! important;
+		}	
+		
+		
+		.indicator-font-neg1 {
+			color: #E15D76 ! important;
+		}
+
+		.indicator-font-neg0 {
+			color: #E1BE5C ! important;
+		}
+
+		.indicator-font-neutral {
+			color: #E3E1E2 ! important;
+		}
+
+		.indicator-font-pos0 {
+			color: #B8EB9F ! important;
+		}
+
+		.indicator-font-pos1 {
+			color: #4BC076 ! important;
+		}			
+		
+		
+	div.badgename {
+		font-size: 12px;
+	}
+		
+	
+	div.badgematch {
+		padding: 10px;
+		border-radius: 100px;
+		width: 60px;
+		float: left;
+		color: #fff;
+		text-align: center;
+		margin: 10px;
+		min-height: 60px;
+		border: 1px solid #dfe0e1;
+	}
+	
+	div.badgematch i.fa {
+		font-size: 1.4em;
+	}
+	
+/*	div.badgematch {
+		border: 2px solid #333;
+	}
+
+	div.badgemiss {
+		border: 2px solid #ff0000;
+	} */
+	
+	div.sidetab {
+		width:30%;
+		height: 100%;
+		background: #53B6D7; 
+		position: absolute;
+		right: 0px;
+		color: #fff;
+		margin-top:-10px;
+		padding-top:30px;
+	}
+	
+	div.badge i.fa
+	{
+		font-size: 2em;
+	}
+	
+		div.ui-header {
+		padding-top: 14px;
+	}
+	
+	div.sideicon
+	{
+		border-radius: 5px;
+        width: 40px;height: 40px; margin-left: 14px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-size: 40px 40px;
+        background-color:#53b6d7;font-size:1.4em;text-align:center;	
+	}
+	
+	div.sideicon span {
+		line-height: 1.9em;
+	}
+
+	div.headicon span {
+		line-height: 1.6em;
+	}
+	
+		
+	div.headicon i.fa {
+		margin-top:12px;
+	}
+	
+	div.headicon
+	{
+		border-radius: 5px;
+        width: 60px;height: 60px; margin: auto; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-size: 60px 60px;
+        background-color:#e98b32;font-size:2.4em;text-align:center;
+	}
+	
+	
+	
+	.chartregion{
+ /* width:100%;
+ border-radius: 5px;
+ background: #fff; */
+/* width: 84%;
+border-radius: 5px;
+background: #fff;
+margin: auto; */
+
+/* width: 100%; */
+border-radius: 5px;
+background: #fff;
+/* margin: auto; */
+margin-left: 14px;
+margin-right: 18px;
+ 
+ }
+ 
+.record{
+/* float: left;
+ width: 100%;
+ margin-bottom: 2px;
+border-radius: 5px;
+background: #ccc; */
+float: left;
+width: 100%;
+border: 1px solid #1F2C38;
+margin-bottom: 2px;
+border-radius: 5px;
+background: #1F3244;
+
+ }
+ 
+.bar {
+ float: left;
+ clear: left;
+ height: 30px;
+-webkit-border-top-left-radius: 5px;
+-webkit-border-bottom-left-radius: 5px;
+-moz-border-radius-topleft: 5px;
+-moz-border-radius-bottomleft: 5px;
+border-top-left-radius: 5px;
+border-bottom-left-radius: 5px;
+ background: #F3AE4E;
+ padding: 6px;
+ width: 0%;
+     -webkit-transition: width 1s ease-in-out;
+    -moz-transition: width 1s ease-in-out;
+    -o-transition: width 1s ease-in-out;
+    transition: width 1s ease-in-out;
+ 
+ }
+ 
+.bar span{
+ color: #fff;
+position: absolute;
+ margin-left: 5px;
+ margin-top: 7px;
+ border-radius: 5px;
+ padding-left: 4px;
+ }
+ 
+.chartregion .p{
+ padding-top: 3px;
+ float: right;
+ color: #6D8591;
+ clear: right;
+ font-size: 12px;
+ font-weight: bold;
+ height: 25px;
+ }
+ 
+.chartregion .p span{
+ font-size: 12px;
+ font-weight: bold;
+ float: left;
+ margin-right: 5px;
+ margin-top: 5px;
+ }
+ 
+ 
+ /* Add more space for header */
+ .ui-header .ui-title, .ui-footer .ui-title
+ {
+ 	margin: 0 10%;
+ }
+ 
+ 
+		.loader {
+			margin: auto;
+			width: 38px;
+			height: 38px;
+			background: url('{!URLFOR($Resource.stylepack, 'stylepack/img/loading-gray.gif')}'); 
+			background-size:38px;
+			margin-top:50%;			
+		}
+ 
+ 
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icon-utility.ttf')}");
+		}
+	
+	
+	div.toolbar i.fa {
+		font-size: 1.8em;
+		padding: 10px;
+	}
+	
+	
+		div.toolbar i.fa {
+		font-size: 1.6em;
+		padding: 11px 0px 12px 0px;
+	}
+	
+	.headicon-wrap {
+		width: 60px;height: 60px; margin: auto;
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+border-radius: 5px;
+background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+background: linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+padding-bottom: 14px;
+	}
+	
+	.headicon-event {
+		border-radius: 5px;
+        width: 60px;height: 60px; background-size: 100%;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.21);
+		border-radius: 5px;
+		background: -webkit-linear-gradient(top,rgba(255,255,255,0.15) 0%,rgba(255,255,255,0) 100%);
+        background-image:url({!URLFOR($Resource.stylepack, 'stylepack/icons/custom/custom20.svg')});
+        background-size: 60px 60px;
+        background-color:#53b6d7;
+    }
+    
+    
+html .ui-page-theme-a .ui-bar-inherit div.toolbar div.ui-grid-b.toolbar.center {
+color: #fff;
+text-align: center;
+background: #293f54;
+border-top: 1px solid #203345;
+}
+
+html .ui-bar-a, html .ui-page-theme-a .ui-bar-inherit, html .ui-bar-a .ui-bar-inherit, html .ui-body-a .ui-bar-inherit, html body .ui-group-theme-a .ui-bar-inherit {
+background: -moz-linear-gradient(#23394d,#33495f);
+background: -webkit-gradient(linear,left top,left bottom,color-stop(0%,#33495f),color-stop(100%,#23394d));
+background: -webkit-linear-gradient(#23394d,#33495f);
+background: -o-linear-gradient(#23394d,#33495f);
+background: -ms-linear-gradient(#23394d,#33495f);
+background: linear-gradient(#23394d,#33495f);
+}    
+	
+	
+	</style>
+	
+	
+	
+	
+	<!--  // End Footer includes -->
+	
+	
+	
+</apex:page>

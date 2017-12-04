@@ -1,0 +1,201 @@
+<apex:page controller="s1m_community_files" sidebar="false">
+
+<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+<style>
+	#phHeaderLogoImage {
+		height: 124px ! important;
+		width: 250px ! important;
+	}
+	
+	div.pagewrap {
+		width: 100%;
+		float: left;
+	} 
+	
+	body {
+		font-size: .8em;
+	}
+	
+	div.leftcol {
+		width: 225px;
+		float: left;
+		padding: 20px;
+		margin-right: 20px;
+		margin-left: -100%;
+	}
+	
+	div.rightcol {
+		padding: 30px 20px 20px 0px;
+		float: left;
+		margin-left: 300px;
+	}
+	
+	.bodyDiv {
+		-webkit-box-shadow: none;
+		box-shadow: none;
+	}
+	
+	.zen .zen-tabMenu .zen-active {
+		background-image: none;
+		-webkit-box-shadow: none;
+		box-shadow: none;		
+	}
+	
+	#contactdetail {
+		margin-left: -50px;
+		list-style-type: none;
+	}
+	
+	div.docwrapper {
+		min-height: 100px;
+		padding-bottom: 10px;
+	}
+	
+	div.docimage {
+		width: 80px;
+		float: left;
+	}
+	
+	div.docimage img {
+		border: 1px solid #ddd;
+		border-radius: 3px;
+		width: 72px;
+	}
+	
+	div.docdetail {
+		padding-top: 10px;
+		float: left;
+		width: 58%;
+	}
+	
+	a.docdownload {
+		background: #1797C0;
+		padding: 10px;
+		border-radius: 5px;
+		color: #fff;
+		text-decoration: none;
+		font-weight: bold;
+		font-size: 1.2em;
+		margin-top: 10px;
+		white-space:nowrap;
+		transition: background 500ms linear;
+	}
+	
+	a.docdownload:hover {
+		transition: background 500ms linear;
+		background: #1F264A;
+		color: #fff;
+		text-decoration: none;
+	}	
+	
+	
+	div.doclink {
+		width: 20%;
+		float: right;
+		text-align: right;
+		padding: 30px 20px 20px 20px;
+	}
+		
+	div.rightcol div.apexp {
+		/* float: left; */
+	}
+	
+	#contactdetail {
+/*		background: #1F264A;
+		padding: 10px;
+		border-radius: 5px;
+		color: #fff; */
+		line-height: 1.6em;
+	}
+	
+	.leftcol .bPageBlock .pbTitle {
+		width: 100% ! important;
+	}
+</style>
+
+<script>
+    
+function bytesToSize(bytes, precision)
+{	
+	var kilobyte = 1024;
+	var megabyte = kilobyte * 1024;
+	var gigabyte = megabyte * 1024;
+	var terabyte = gigabyte * 1024;
+	
+	if ((bytes >= 0) && (bytes < kilobyte)) {
+		return bytes + ' B';
+
+	} else if ((bytes >= kilobyte) && (bytes < megabyte)) {
+		return (bytes / kilobyte).toFixed(precision) + ' KB';
+
+	} else if ((bytes >= megabyte) && (bytes < gigabyte)) {
+		return (bytes / megabyte).toFixed(precision) + ' MB';
+
+	} else if ((bytes >= gigabyte) && (bytes < terabyte)) {
+		return (bytes / gigabyte).toFixed(precision) + ' GB';
+
+	} else if (bytes >= terabyte) {
+		return (bytes / terabyte).toFixed(precision) + ' TB';
+
+	} else {
+		return bytes + ' B';
+	}
+}
+</script>
+
+<div class="pagewrap">
+	
+	<div class="rightcol">
+		<h1>Welcome</h1>
+		<p>
+			Thank you very much for your interest in products from Salesforce1 Ignition Pack.  If you have any questions
+			please reach out to your account executive.  We look forward to supporting your business.
+		</p>
+	
+		<apex:pageBlock title="Personal Library" id="library">
+			<apex:repeat value="{!ChatterFeedItems}" var="item">
+				<div class="docwrapper">
+					<div class="docimage">
+						<a href="/customer/sfc/servlet.shepherd/version/download/{!item.RelatedRecordId}?asPdf=false&operationContext=CHATTER"><img src="/customer/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB120BY90&versionId={!item.RelatedRecordId}&operationContext=CHATTER" /></a>
+					</div>
+					<div class="docdetail">
+						<h2><a href="/customer/sfc/servlet.shepherd/version/download/{!item.RelatedRecordId}?asPdf=false&operationContext=CHATTER" style="text-decoration:none">{!item.Title}</a></h2>
+						<p style="margin-top:10px;">
+							{!item.ContentDescription}
+						</p>
+						<p style="margin-top:2px;">
+							<span id="size-{!item.Id}"></span> - {!item.ContentType}
+						</p>
+					</div>
+					<div class="doclink">
+						<a href="/customer/sfc/servlet.shepherd/version/download/{!item.RelatedRecordId}?asPdf=false&operationContext=CHATTER" class="docdownload"><i class="fa fa-cloud-download"></i> Download File</a>
+					</div>
+				</div>
+				
+				<script>
+    				$('#size-{!item.Id}').html(bytesToSize({!item.ContentSize}));
+    			</script>
+    	
+			</apex:repeat>
+		</apex:pageBlock>
+										
+	</div>
+
+</div>
+ 
+	<div class="leftcol">
+		<apex:pageBlock title="Your Account Executive" id="execbg">
+			<img id="userphoto" src="{!myUser.FullPhotoURL}" style="border-radius:5px;"/>
+			<ul id="contactdetail">
+				<li>{!myUser.Name}</li>
+				<li><i class="fa fa-envelope-square"></i> {!myUser.Email}</li>
+				<li><i class="fa fa-phone-square"></i> {!myUser.MobilePhone}</li>
+				<li><i class="fa fa-linkedin-square" style="color: #00aced"></i> Connect on LinkedIn</li>
+				<li><i class="fa fa-twitter" style="color: #007bb6"></i> Follow me on Twitter</li>
+			</ul>
+		</apex:pageBlock>
+	</div>
+
+</apex:page>

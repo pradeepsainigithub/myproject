@@ -1,0 +1,446 @@
+<apex:page standardController="S1M_Explain_Collection__c" extensions="s1m_explain_quizzer" 
+docType="html-5.0" applyBodyTag="false" applyHtmlTag="true" cache="true" showHeader="false" 
+standardStylesheets="false" sidebar="false" manifest="/apex/CacheManifest">
+
+	<meta charset="utf-8"></meta>
+
+	<title>{!S1M_Explain_Collection__c.Name}</title>
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"></meta>
+
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.touchSwipe.min.js')}"></script>
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.easing.min.js')}"></script>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/jquery.mobile.flatui.css')}"></link>
+	
+	<script src="{!URLFOR($Resource.stylepack, 'stylepack/js/jquery.easypiechart.min.js')}"></script>
+	<link rel="stylesheet" href="{!URLFOR($Resource.stylepack, 'stylepack/css/fontawesome/css/font-awesome.min.css')}"></link>
+
+	<apex:variable value="{!0}" var="indexClosed"></apex:variable>
+ 	
+ 	<div id="scoreblock">
+ 		<h1 id="score"></h1>
+ 	</div>
+ 	
+ 	<div id="final">
+	 	<div class="chart" data-percent="0">0%</div>
+	</div>
+
+	<div id="result" style="display:none;"></div>
+ 	
+					<section id="directions">
+						<h3>Swipe Card Left for False, Right for True</h3>
+						<img src="{!URLFOR($Resource.stylepack, 'stylepack/img/gesture-swipe-tf.png')}" style="margin-top:30px;width:240px;margin-bottom:30px;"/>
+						<div data-theme="f" id="startbutton">Tap to Start</div>
+					</section> 
+ 	
+ 	<div id="cardstack"> 	
+ 	
+		<apex:repeat value="{!S1MExplainItems}" var="explainitem">
+			<apex:variable value="{!indexClosed+1}" var="indexClosed"></apex:variable>
+			<div id="card{!indexClosed}" data-cardid="{!indexClosed}" data-answer="{!explainitem.Quiz_Card_Answer__c}" class="quizcard" style="z-index:{!indexClosed}; display:none;">
+				{!explainitem.Body_Text__c}
+			</div>
+		</apex:repeat>	
+
+
+		<div id="buttondone">
+
+		</div>
+
+	</div>
+
+
+	<script>
+
+        $(function() {      
+		        
+	        $('#startbutton').click(function () {
+	        	$('#directions').hide();
+	        	$('#cardstack').fadeIn();
+	        	$('#scoreblock').fadeIn();
+	        });
+	        
+	    });	        
+        
+	
+		// Show first card...
+		$('#card{!indexClosed}').fadeIn(1000);
+		
+		var score = 0;
+		var currentCard = 1;
+		var totalCards = $('.quizcard').length; //{!indexClosed};
+		
+		
+		function endQuiz()
+		{
+			$('#result').hide();
+			$('#score').addClass('movedown');
+			$('#score').html('Quiz Complete<br/>' + score + ' of ' + totalCards + ' Correct');
+			
+			endScore = 100*(score/totalCards);
+			
+			//$('div.chart').data('percent', endScore);
+			$('div.chart').attr('data-percent', 0);
+			
+			$('div.chart').text(endScore + '%');
+						
+			$('#final').fadeIn();
+
+			$('.chart').easyPieChart({
+				easing: 'easeOutQuad',
+				barColor: '#2A94D6',
+				trackColor: '#F0F1F2',
+				lineWidth: '40',
+				size: '220',
+				lineCap: 'butt',
+				animate: 1000,
+				scaleColor: false
+			});
+			
+			$('.chart').data('easyPieChart').update(endScore);
+						
+		}
+		
+		
+		function statusUpdate(current, total) {
+			if (current > total) {
+				setTimeout(
+				  function() 
+				  {
+				  	endQuiz();
+				  }, 200);
+			}
+			else
+			{
+				$('#score').html(current + ' / ' + total);
+			}
+		}
+		
+
+		
+		statusUpdate(currentCard, totalCards);
+		
+	 
+		$(function() {      
+		
+	      //Enable swiping...
+
+	      $(".quizcard").swipe( {
+	      
+	      	      
+	        //Generic swipe handler for all directions
+	        swipe:function(event, direction, distance, duration, fingerCount) {
+	          //$(this).text("You swiped " + direction );
+
+
+
+
+				console.log('DETECT: Swipe...: ' + direction);
+	          	
+	          	$('#state').html(direction);
+	          
+	          	if (direction == 'left') {
+	          	
+	          		
+	          		$(this).addClass( "left" );
+	          		
+	          	
+		        	$(this).animate({
+				    	opacity: 0.1
+				 	}, 250, function() {
+
+				    	// Animation complete for FALSE
+				    	if ($(this).data('answer') == 'False')
+				    	{
+				    		$('#result').html('<i class="fa fa-check" style="color: #68d166"></i>');
+				    		$(this).addClass('correct');
+				    		score += 1;
+				    	}
+				    	else
+				    	{
+				    		$('#result').html('<i class="fa fa-circle-o" style="color: #c70000"></i>');
+				    		$(this).addClass('wrong');
+				    	}
+				    	
+					    var nextCardId = $(this).data("cardid") - 1;				    	
+				    	
+				    	
+				    	$(this).fadeOut(500, function(){
+						  $("#result").fadeIn(1000, function(){
+						    $("#result").fadeOut(1000, function(){
+						      $('#card' + nextCardId).fadeIn(500);
+						      	currentCard += 1;
+	      						statusUpdate(currentCard, totalCards);
+						    });
+						  });
+						});
+				    	
+				    	
+				  	});
+				}
+				
+				if (direction == 'right') {
+				
+					$(this).addClass( "right" );
+				
+				
+		        	$(this).animate({
+				    	opacity: 0.1
+				 	}, 250, function() {
+				 	
+				    	// Animation complete for TRUE
+				    	if ($(this).data('answer') == 'True')
+				    	{
+				    		$('#result').html('<i class="fa fa-check" style="color: #68d166;"></i>');
+				    		$(this).addClass('correct');
+				    		score += 1;
+				    	}
+				    	else
+				    	{
+				    		$('#result').html('<i class="fa fa-circle-o" style="color: #c70000;"></i>');
+				    		$(this).addClass('wrong');
+				    	}
+				    	
+				    	var nextCardId = $(this).data("cardid") - 1;
+				    	
+				    	$(this).fadeOut(500, function(){
+						  $("#result").fadeIn(1000, function(){
+						    $("#result").fadeOut(1000, function(){
+						      $('#card' + nextCardId).fadeIn(500);
+						      	currentCard += 1;
+	      						statusUpdate(currentCard, totalCards);
+						      
+						    });
+						  });
+						});
+				    	
+				  	});
+				}
+				
+	            
+	        },
+	        //Default is 75px, set to 0 for demo so any distance triggers swipe
+	         threshold:0
+	      });
+
+	    });
+
+	</script>
+
+	<style>
+	
+	html {
+		background: #fff;
+	}	
+		
+	#startbutton
+	{
+		font-size: 20px;
+		margin: .5em 0;
+		padding: 7px 6px;
+		display: block;
+		position: relative;
+		text-align: center;
+		text-overflow: ellipsis;
+		overflow: hidden;
+		white-space: nowrap;
+		cursor: pointer;
+		-webkit-user-select: none;
+		-moz-user-select: none;
+		-ms-user-select: none;
+		user-select: none;
+		font-family: 'ProximaNova', Arial, sans-serif;
+		border-width: 1px;
+		border-style: solid;
+		-webkit-border-radius: 5px;
+		border-radius: 5px;
+		background: #3498db;
+		border-color: #3498db;
+		color: #fff;
+		width: 80%;
+		margin: auto;
+		margin-top: 20px;
+	}
+	
+	
+	h3
+	{
+		font-size: 1.6em;
+		line-height: 1.5em ! important;
+		font-family: 'ProximaNova';
+		width: 70%;
+		margin: auto;
+	}
+	
+	
+	#directions {
+		text-align: center;
+		margin-top: 40px;
+	}
+	
+	
+		#final {
+			display: none;
+			margin: auto;
+/* text-align: center; */
+width:240px
+		}
+		
+		.chart {
+			margin: auto;
+		}
+		
+		#scoreblock {
+			display: none;
+		}
+	
+		#score {
+			color: #333;
+			font-size: 2em;
+			font-family: 'ProximaNova';
+		}
+		
+		#score.movedown {
+			margin-top: 20px;
+		}
+		
+		#result {
+			font-size: 7em;
+			/*position: absolute; */	
+			  margin-top: 70px;	
+			  text-align: center;
+			  width: 100%;
+			  z-index: 2;	
+		}
+		
+		#scoreblock {
+			width: 100%;
+			text-align: center;
+			margin-top: 20px;
+		}
+	
+		div.quizcard {
+			background: #344A5F;
+			border-radius: 5px;
+			border: 10px solid #F0F1F2;
+			height: 200px;
+			width: 200px;
+			margin: auto;
+			padding: 50px 10px 10px 10px;
+			font-size: 1.6em;
+			-webkit-transition: .2s;
+			-moz-transition: .2s;
+			-o-transition: .2s;
+			transition: .2s;
+			color: #fff;
+		}
+		
+		div.quizcard.left {
+			-webkit-transform:rotate(-2deg) scale(.7);
+			/* -webkit-transform: scale(.7);*/
+			margin-left: -240px;
+		}
+
+		div.quizcard.right {
+			-webkit-transform:rotate(2deg) scale(.7);
+			/* -webkit-transform: scale(.7); */
+			margin-right: -240px;
+		}
+		
+		div.quizcard .correct {
+			background: #68d166;
+			border: 10px solid #68d166;
+		}
+		
+		div.quizcard .wrong {
+			background: #fdb9d1;
+			border: 10px solid #fa7da8;
+		}
+
+		
+		#cardstack {
+			text-align: center;
+			width: 100%;
+			margin-top: 20px;
+			overflow: hidden;
+			display: none;
+		}
+		
+		/* For charts */
+		.chart {
+/*		  position: relative;
+		  display: inline-block;
+		  width: 240px;
+		  height: 240px;
+		  margin-top: 50px;
+		  margin-bottom: 50px;
+		  text-align: center;
+		  margin-left: 10%;*/
+/* position: relative; */
+display: inline-block;
+width: 240px;
+height: 240px;
+/* margin-top: 50px; */
+/* margin-bottom: 50px; */
+text-align: center;
+/* margin-left: 10%; */
+font-size: 3em;
+margin-top: 100px;
+/* margin: auto; */
+/* position: relative; */
+		  
+		}
+		.chart canvas {
+/*		  position: absolute;
+		  top: 0;
+		  left: 0; */
+
+margin-top: -134px;		  
+		  
+		}
+		.percent {
+		  display: inline-block;
+		  line-height: 230px;
+		  z-index: 2;
+		  font-size: 4em;
+		  color: #ddd;		  
+		}
+		.percent:after {
+		  content: '%';
+		  margin-left: 0.1em;
+		  font-size: .8em;
+		  color: #ddd;
+		}
+		.span6 {
+		  float: left;
+		  width: 50%;
+		}
+				
+		/* End charts */
+	</style>
+	
+	
+	<!--  Footer includes --> 
+	
+	<style>
+		@font-face {
+		  font-family: 'ProximaNova';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/ProximaNovaSoft-Regular.ttf')}") format('truetype');
+		  font-weight: 300;
+		  font-style: normal; }
+		
+		@font-face {
+		  font-family: 'icomoon';
+		  src: url("{!URLFOR($Resource.stylepack, 'stylepack/css/fonts/icomoon.eot')}");
+		}
+	
+		body {
+			font-family: 'ProximaNova';
+			color: #333;
+		}
+	
+	</style>
+
+
+</apex:page>
