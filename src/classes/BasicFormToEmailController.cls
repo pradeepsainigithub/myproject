@@ -26,7 +26,8 @@ global class BasicFormToEmailController {
         }
         catch (Exception e) {
             throw new AuraHandledException('Something went wrong: ' + e.getMessage());   
-            // this is after second commit  
+            // this is after second commit
+            // this is my third commit  
         }
     }
 }
